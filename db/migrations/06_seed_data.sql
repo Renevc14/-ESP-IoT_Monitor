@@ -9,14 +9,14 @@ INSERT INTO auth.users (id, email, password_hash, role, full_name) VALUES
 (
     'a0000000-0000-0000-0000-000000000001',
     'admin@iot.local',
-    '$2b$12$wxjb68ZefHV4GBk27lIx4eTKM8kci/cQ1DoQo.t67oWb3CUaQHWAG',
+    '$2b$12$KZ/UFmLsg4zg724B0p8ETeumDMlfia8PB2hv0mz9NV9.24HHYury.',
     'admin',
     'System Administrator'
 ),
 (
     'a0000000-0000-0000-0000-000000000002',
     'operator@iot.local',
-    '$2b$12$oe9IokPM5qN4ZUQRduS3QOyhxA6MxAwvSesBQbQa13EkDyv.Vad9y',
+    '$2b$12$zf4i8RuMUMrA5P6msQXBjOmMhI/icbXOfMPIIn4urUtmD1kZWOwQK',
     'operator',
     'IoT Operator'
 )
@@ -31,21 +31,21 @@ INSERT INTO iot.devices (id, name, device_type, location, auth_token_hash) VALUE
     'Server Room Sensor',
     'multi_sensor',
     'Data Center - Rack A1',
-    '$2b$12$wxjb68ZefHV4GBk27lIx4eTKM8kci/cQ1DoQo.t67oWb3CUaQHWAG'
+    '$2b$12$MTqBJGAH.iGYNBQuqNaS5ej3o2f8kc6HQSv9yaBUtsTs6oEdRdnwq'
 ),
 (
     'd0000000-0000-0000-0000-000000000002',
     'Office Climate Sensor',
     'multi_sensor',
     'Office Floor 2',
-    '$2b$12$wxjb68ZefHV4GBk27lIx4eTKM8kci/cQ1DoQo.t67oWb3CUaQHWAG'
+    '$2b$12$MTqBJGAH.iGYNBQuqNaS5ej3o2f8kc6HQSv9yaBUtsTs6oEdRdnwq'
 ),
 (
     'd0000000-0000-0000-0000-000000000003',
     'UPS Energy Monitor',
     'energy_meter',
     'Data Center - UPS Room',
-    '$2b$12$wxjb68ZefHV4GBk27lIx4eTKM8kci/cQ1DoQo.t67oWb3CUaQHWAG'
+    '$2b$12$MTqBJGAH.iGYNBQuqNaS5ej3o2f8kc6HQSv9yaBUtsTs6oEdRdnwq'
 )
 ON CONFLICT (id) DO NOTHING;
 
