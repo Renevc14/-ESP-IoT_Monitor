@@ -1,7 +1,7 @@
 import uuid
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -15,7 +15,7 @@ bearer = HTTPBearer(auto_error=False)
 router = APIRouter()
 
 
-def _get_session_factory(request) -> async_sessionmaker:
+def _get_session_factory(request: Request) -> async_sessionmaker:
     return request.app.state.session_factory
 
 
