@@ -66,6 +66,7 @@ services:
     environment:
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
       EXCHANGE_NAME: sensor_data_exchange
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy
