@@ -1,10 +1,11 @@
-import { Activity, Bell, Cpu, LayoutDashboard, LogOut } from 'lucide-react'
+import { Activity, Bell, Cpu, LayoutDashboard, LogOut, SlidersHorizontal } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const NAV = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/devices', icon: Cpu, label: 'Devices' },
+  { to: '/alert-rules', icon: SlidersHorizontal, label: 'Alert Rules' },
   { to: '/alerts', icon: Bell, label: 'Alerts' },
 ]
 
