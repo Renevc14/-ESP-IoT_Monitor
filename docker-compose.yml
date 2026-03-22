@@ -46,6 +46,7 @@ services:
       REFRESH_TOKEN_EXPIRE_DAYS: 7
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
       ANALYTICS_SERVICE_URL: http://analytics:8004
+      ALERTS_URL: http://alerts:8003
     depends_on:
       redis:
         condition: service_healthy
@@ -149,12 +150,15 @@ services:
     container_name: iot-simulator
     environment:
       GATEWAY_URL: http://gateway:8000
-      OPERATOR_EMAIL: ${SIMULATOR_EMAIL:-operator@iot.local}
-      OPERATOR_PASSWORD: ${SIMULATOR_PASSWORD:-Operator1234!}
-      NUM_DEVICES: ${SIM_DEVICES:-3}
-      NUM_READINGS: ${SIM_READINGS:-10}
+      INGESTION_URL: http://ingestion:8001
+      OPERATOR_EMAIL: ${OPERATOR_EMAIL:-operator@iot.local}
+      OPERATOR_PASSWORD: ${OPERATOR_PASSWORD:-Operator1234!}
+      MODE: ${MODE:-continuous}
+      INTERVAL: ${INTERVAL:-60}
     depends_on:
       gateway:
+        condition: service_healthy
+      ingestion:
         condition: service_healthy
     profiles:
       - simulator

@@ -55,6 +55,7 @@ async def test_alert_generated_and_acknowledged(admin_token, operator_token):
                 if a["device_id"] == DEVICE_ID
                 and abs(float(a["triggered_value"]) - OVER_THRESHOLD_VALUE) < 0.1
                 and a["status"] == "active"
+                and a["severity"] == "critical"
             ),
             None,
         )
