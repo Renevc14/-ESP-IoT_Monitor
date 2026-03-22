@@ -69,7 +69,7 @@ function ReadingsChart({
 }) {
   const { data, loading } = useQuery(RECENT_READINGS, {
     variables: { deviceId, sensorType },
-    pollInterval: 30000,
+    pollInterval: 10000,
   })
 
   const chartData = ((data as any)?.readings ?? [])
