@@ -31,3 +31,24 @@ class AlertSummaryType:
     active: int
     critical: int
     warning: int
+
+
+@strawberry.type
+class DeviceType:
+    id: str
+    name: str
+    device_type: str
+    location: str
+    is_active: bool
+    created_at: datetime
+
+
+@strawberry.type
+class AlertType:
+    id: str
+    rule_id: str
+    device_id: str
+    triggered_value: float
+    severity: str
+    status: str
+    created_at: datetime

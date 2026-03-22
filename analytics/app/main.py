@@ -10,10 +10,12 @@ from strawberry.fastapi import GraphQLRouter
 from app.config import settings
 from app.resolvers.queries import (
     resolve_alert_summary,
+    resolve_alerts,
     resolve_device_summary,
+    resolve_devices,
     resolve_readings,
 )
-from app.types.schema import AlertSummaryType, DeviceSummaryType, SensorReadingType
+from app.types.schema import AlertSummaryType, AlertType, DeviceSummaryType, DeviceType, SensorReadingType
 
 
 @strawberry.type
@@ -29,6 +31,14 @@ class Query:
     alert_summary: AlertSummaryType = strawberry.field(
         resolver=resolve_alert_summary,
         description="Platform-wide alert counts by severity and status",
+    )
+    devices: List[DeviceType] = strawberry.field(
+        resolver=resolve_devices,
+        description="List registered devices with optional active filter",
+    )
+    alerts: List[AlertType] = strawberry.field(
+        resolver=resolve_alerts,
+        description="List alerts with optional device and status filters",
     )
 
 
