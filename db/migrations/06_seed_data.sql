@@ -72,6 +72,7 @@ INSERT INTO alerts.alert_rules (device_id, sensor_type, operator, threshold, sev
 ('d0000000-0000-0000-0000-000000000002', 'temperature', 'gt', 40.0, 'critical'),
 ('d0000000-0000-0000-0000-000000000002', 'temperature', 'gt', 35.0, 'warning'),
 ('d0000000-0000-0000-0000-000000000002', 'temperature', 'lt', 10.0, 'critical'),
--- Energy rules for device 3
-('d0000000-0000-0000-0000-000000000003', 'energy', 'gt', 4.5, 'critical'),
-('d0000000-0000-0000-0000-000000000003', 'energy', 'gt', 3.5, 'warning');
+-- Solar panel + battery rules for device 3
+-- Alert on abnormal deep battery discharge (negative = discharging)
+('d0000000-0000-0000-0000-000000000003', 'energy', 'lt', -2.0, 'warning'),
+('d0000000-0000-0000-0000-000000000003', 'energy', 'lt', -3.0, 'critical');
