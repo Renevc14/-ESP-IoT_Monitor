@@ -3,6 +3,7 @@ import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-d
 import { apolloClient } from './api/apollo'
 import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './context/AuthContext'
+import AlertRules from './pages/AlertRules'
 import Alerts from './pages/Alerts'
 import Dashboard from './pages/Dashboard'
 import Devices from './pages/Devices'
@@ -27,6 +28,7 @@ function AppRoutes() {
       >
         <Route index element={<Dashboard />} />
         <Route path="devices" element={<Devices />} />
+        <Route path="alert-rules" element={<AlertRules />} />
         <Route path="alerts" element={<Alerts />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

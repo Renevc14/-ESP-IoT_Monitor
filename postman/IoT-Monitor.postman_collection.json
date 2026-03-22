@@ -1,0 +1,459 @@
+{
+  "info": {
+    "name": "IoT Monitoring Platform",
+    "description": "Complete API collection for the IoT Monitoring Platform.\n\n**Setup:**\n1. Import this collection and the `IoT-Monitor.postman_environment.json` environment.\n2. Select the **IoT Monitor - Local** environment.\n3. Run **Auth / Login as Admin** — the token is saved automatically to `adminToken`.\n4. Run **Auth / Login as Operator** to save `operatorToken`.\n5. All other requests use `{{adminToken}}` or `{{operatorToken}}` automatically.\n\n**Base URLs (default local stack):**\n- Gateway: `http://localhost:8000`\n- Ingestion: `http://localhost:8001`\n- Analytics (GraphQL): `http://localhost:8004`\n- Alerts (WebSocket): `ws://localhost:8003`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "gatewayUrl", "value": "http://localhost:8000", "type": "string" },
+    { "key": "ingestionUrl", "value": "http://localhost:8001", "type": "string" },
+    { "key": "analyticsUrl", "value": "http://localhost:8004", "type": "string" },
+    { "key": "alertsUrl", "value": "http://localhost:8003", "type": "string" },
+    { "key": "adminToken", "value": "", "type": "string" },
+    { "key": "operatorToken", "value": "", "type": "string" },
+    { "key": "deviceId", "value": "d0000000-0000-0000-0000-000000000001", "type": "string" },
+    { "key": "ruleId", "value": "", "type": "string" },
+    { "key": "alertId", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login as Admin",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  pm.collectionVariables.set('adminToken', data.access_token);",
+                  "  console.log('Admin token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@iot.local\",\n  \"password\": \"Admin1234!\"\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/auth/login", "host": ["{{gatewayUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Login as Operator",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.access_token) {",
+                  "  pm.collectionVariables.set('operatorToken', data.access_token);",
+                  "  console.log('Operator token saved');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operator@iot.local\",\n  \"password\": \"Operator1234!\"\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/auth/login", "host": ["{{gatewayUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refresh_token\": \"<paste refresh_token from login response>\"\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/auth/refresh", "host": ["{{gatewayUrl}}"], "path": ["auth", "refresh"] }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/users/me", "host": ["{{gatewayUrl}}"], "path": ["users", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Devices",
+      "item": [
+        {
+          "name": "List Devices",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/devices", "host": ["{{gatewayUrl}}"], "path": ["devices"] }
+          }
+        },
+        {
+          "name": "Get Device by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/devices/{{deviceId}}", "host": ["{{gatewayUrl}}"], "path": ["devices", "{{deviceId}}"] }
+          }
+        },
+        {
+          "name": "Register Device (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set('deviceId', data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Sensor\",\n  \"device_type\": \"multi_sensor\",\n  \"location\": \"Lab Room\",\n  \"auth_token\": \"my-secret-device-token\"\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/devices", "host": ["{{gatewayUrl}}"], "path": ["devices"] }
+          }
+        },
+        {
+          "name": "Update Device (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Sensor Name\",\n  \"location\": \"New Location\",\n  \"is_active\": true\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/devices/{{deviceId}}", "host": ["{{gatewayUrl}}"], "path": ["devices", "{{deviceId}}"] }
+          }
+        },
+        {
+          "name": "Delete Device (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/devices/{{deviceId}}", "host": ["{{gatewayUrl}}"], "path": ["devices", "{{deviceId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alert Rules",
+      "item": [
+        {
+          "name": "List Alert Rules",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/alert-rules", "host": ["{{gatewayUrl}}"], "path": ["alert-rules"] }
+          }
+        },
+        {
+          "name": "List Rules for Device",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{gatewayUrl}}/alert-rules?device_id={{deviceId}}",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["alert-rules"],
+              "query": [{ "key": "device_id", "value": "{{deviceId}}" }]
+            }
+          }
+        },
+        {
+          "name": "Create Alert Rule (admin)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.id) pm.collectionVariables.set('ruleId', data.id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"{{deviceId}}\",\n  \"sensor_type\": \"temperature\",\n  \"operator\": \"gt\",\n  \"threshold\": 40.0,\n  \"severity\": \"critical\"\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/alert-rules", "host": ["{{gatewayUrl}}"], "path": ["alert-rules"] }
+          }
+        },
+        {
+          "name": "Update Alert Rule (admin)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"threshold\": 38.0,\n  \"severity\": \"warning\",\n  \"is_active\": true\n}"
+            },
+            "url": { "raw": "{{gatewayUrl}}/alert-rules/{{ruleId}}", "host": ["{{gatewayUrl}}"], "path": ["alert-rules", "{{ruleId}}"] }
+          }
+        },
+        {
+          "name": "Delete Alert Rule (admin)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/alert-rules/{{ruleId}}", "host": ["{{gatewayUrl}}"], "path": ["alert-rules", "{{ruleId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "List Alerts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (Array.isArray(data) && data.length > 0) {",
+                  "  const active = data.find(a => a.status === 'active');",
+                  "  if (active) pm.collectionVariables.set('alertId', active.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/alerts", "host": ["{{gatewayUrl}}"], "path": ["alerts"] }
+          }
+        },
+        {
+          "name": "List Active Alerts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{gatewayUrl}}/alerts?status=active",
+              "host": ["{{gatewayUrl}}"],
+              "path": ["alerts"],
+              "query": [{ "key": "status", "value": "active" }]
+            }
+          }
+        },
+        {
+          "name": "Acknowledge Alert",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{gatewayUrl}}/alerts/{{alertId}}/acknowledge", "host": ["{{gatewayUrl}}"], "path": ["alerts", "{{alertId}}", "acknowledge"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingestion",
+      "item": [
+        {
+          "name": "Submit Reading (operator)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"d0000000-0000-0000-0000-000000000001\",\n  \"sensor_type\": \"temperature\",\n  \"value\": 22.5,\n  \"unit\": \"C\",\n  \"recorded_at\": \"2026-03-22T10:00:00Z\"\n}"
+            },
+            "url": { "raw": "{{ingestionUrl}}/ingest/reading", "host": ["{{ingestionUrl}}"], "path": ["ingest", "reading"] }
+          }
+        },
+        {
+          "name": "Submit Over-Threshold Reading (triggers alert)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"device_id\": \"d0000000-0000-0000-0000-000000000001\",\n  \"sensor_type\": \"temperature\",\n  \"value\": 45.5,\n  \"unit\": \"C\",\n  \"recorded_at\": \"2026-03-22T10:00:00Z\"\n}"
+            },
+            "url": { "raw": "{{ingestionUrl}}/ingest/reading", "host": ["{{ingestionUrl}}"], "path": ["ingest", "reading"] }
+          }
+        },
+        {
+          "name": "Ingestion Health",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{ingestionUrl}}/health", "host": ["{{ingestionUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "GraphQL Analytics",
+      "item": [
+        {
+          "name": "Query — Readings",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ readings(deviceId: \\\"d0000000-0000-0000-0000-000000000001\\\", sensorType: \\\"temperature\\\", limit: 10) { id value unit recordedAt } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Query — Device Summary (24h stats)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ deviceSummary(deviceId: \\\"d0000000-0000-0000-0000-000000000001\\\", hours: 24) { sensorType readingCount avgValue minValue maxValue } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Query — Alert Summary",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ alertSummary { total active critical warning } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Query — Devices",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ devices { id name deviceType location isActive } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Query — Alerts",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ alerts(status: \\\"active\\\", limit: 10) { id deviceId severity status triggeredValue createdAt } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "Query — Full Dashboard",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ devices { id name deviceType isActive } alertSummary { total active critical warning } deviceSummary(deviceId: \\\"d0000000-0000-0000-0000-000000000001\\\", hours: 24) { sensorType readingCount avgValue minValue maxValue } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        },
+        {
+          "name": "GraphQL Introspection",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"{ __type(name: \\\"Query\\\") { fields { name description } } }\"\n}"
+            },
+            "url": { "raw": "{{analyticsUrl}}/graphql", "host": ["{{analyticsUrl}}"], "path": ["graphql"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "Gateway",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{gatewayUrl}}/health", "host": ["{{gatewayUrl}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Ingestion",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{ingestionUrl}}/health", "host": ["{{ingestionUrl}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Analytics",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{analyticsUrl}}/health", "host": ["{{analyticsUrl}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Alerts Service",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{alertsUrl}}/health", "host": ["{{alertsUrl}}"], "path": ["health"] }
+          }
+        }
+      ]
+    }
+  ]
+}
