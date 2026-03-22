@@ -1,22 +1,36 @@
 import { Activity, Bell, Cpu, LayoutDashboard, LogOut, SlidersHorizontal } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-
-const NAV = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/devices', icon: Cpu, label: 'Devices' },
-  { to: '/alert-rules', icon: SlidersHorizontal, label: 'Alert Rules' },
-  { to: '/alerts', icon: Bell, label: 'Alerts' },
-]
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const [activeAlerts, setActiveAlerts] = useState(0)
+
+  useEffect(() => {
+    function fetchCount() {
+      api.get('/alerts')
+        .then((r) => setActiveAlerts(r.data.filter((a: any) => a.status === 'active').length))
+        .catch(() => {})
+    }
+    fetchCount()
+    const id = setInterval(fetchCount, 30000)
+    return () => clearInterval(id)
+  }, [])
 
   function handleLogout() {
     logout()
     navigate('/login')
   }
+
+  const NAV = [
+    { to: '/',            icon: LayoutDashboard,  label: 'Dashboard',   badge: 0            },
+    { to: '/devices',     icon: Cpu,               label: 'Devices',     badge: 0            },
+    { to: '/alert-rules', icon: SlidersHorizontal, label: 'Alert Rules', badge: 0            },
+    { to: '/alerts',      icon: Bell,              label: 'Alerts',      badge: activeAlerts },
+  ]
 
   return (
     <div className="flex h-screen bg-slate-900 text-slate-100">
@@ -28,7 +42,7 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 px-2 py-4 space-y-1">
-          {NAV.map(({ to, icon: Icon, label }) => (
+          {NAV.map(({ to, icon: Icon, label, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -42,7 +56,12 @@ export default function Layout() {
               }
             >
               <Icon size={16} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {badge > 0 && (
+                <span className="bg-red-500 text-white text-xs font-medium rounded-full px-1.5 py-0.5 min-w-[20px] text-center leading-tight">
+                  {badge}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>
