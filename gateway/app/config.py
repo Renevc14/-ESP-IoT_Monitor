@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     allowed_origins: str = "http://localhost"
     analytics_service_url: str = "http://analytics:8004"
+    alerts_url: str = "http://alerts:8003"
 
     class Config:
         env_file = ".env"
