@@ -35,21 +35,16 @@ class Query:
 schema = strawberry.Schema(query=Query)
 
 
-async def get_context(session_factory=None):
-    async with session_factory() as session:
-        yield {"session": session}
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_factory = session_factory
 
-    graphql_app = GraphQLRouter(
-        schema,
-        context_getter=lambda: get_context(session_factory),
-    )
+    async def get_context() -> dict:
+        return {"session_factory": session_factory}
+
+    graphql_app = GraphQLRouter(schema, context_getter=get_context)
     app.include_router(graphql_app, prefix="/graphql")
 
     yield
