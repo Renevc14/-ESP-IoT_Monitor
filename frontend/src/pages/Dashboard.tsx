@@ -26,15 +26,25 @@ const DEVICE_SUMMARY = gql`
   }
 `
 
-const RECENT_READINGS = gql`
-  query RecentReadings($deviceId: String!, $sensorType: String!) {
-    readings(deviceId: $deviceId, sensorType: $sensorType, limit: 40) {
-      value
-      unit
-      recordedAt
+const BUCKETED_READINGS = gql`
+  query BucketedReadings($deviceId: String!, $sensorType: String!, $hours: Int!, $bucketMinutes: Int!) {
+    bucketedReadings(deviceId: $deviceId, sensorType: $sensorType, hours: $hours, bucketMinutes: $bucketMinutes) {
+      bucket
+      avgValue
+      minValue
+      maxValue
+      readingCount
     }
   }
 `
+
+// Auto-select bucket size to keep ~50-80 points on the chart regardless of window
+function autoBucket(hours: number): number {
+  if (hours <= 1)  return 1
+  if (hours <= 6)  return 5
+  if (hours <= 24) return 30
+  return 60
+}
 
 // ── Types & constants ──────────────────────────────────────────────────────────
 
@@ -71,18 +81,26 @@ function StatCard({ label, value, unit, color }: { label: string; value: number 
   )
 }
 
-function ReadingsChart({ deviceId, sensorType, color, unit }: { deviceId: string; sensorType: string; color: string; unit: string }) {
-  const { data, loading } = useQuery(RECENT_READINGS, {
-    variables: { deviceId, sensorType },
-    pollInterval: 10000,
+function ReadingsChart({ deviceId, sensorType, color, unit, hours }: { deviceId: string; sensorType: string; color: string; unit: string; hours: number }) {
+  const bucketMinutes = autoBucket(hours)
+  const { data, loading } = useQuery(BUCKETED_READINGS, {
+    variables: { deviceId, sensorType, hours, bucketMinutes },
+    pollInterval: 30000,
   })
 
-  const chartData = ((data as any)?.readings ?? [])
-    .map((r: any) => ({
-      time: new Date(r.recordedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      value: Number(r.value),
-    }))
-    .reverse()
+  const fmtTime = (iso: string) => {
+    const d = new Date(iso)
+    if (hours <= 6)  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (hours <= 24) return d.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+  }
+
+  const chartData = ((data as any)?.bucketedReadings ?? []).map((r: any) => ({
+    time: fmtTime(r.bucket),
+    value: Number(r.avgValue),
+    min: Number(r.minValue),
+    max: Number(r.maxValue),
+  }))
 
   if (loading && chartData.length === 0) {
     return <div className="h-44 flex items-center justify-center text-slate-500 text-sm">Loading…</div>
@@ -101,6 +119,7 @@ function ReadingsChart({ deviceId, sensorType, color, unit }: { deviceId: string
           contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
           labelStyle={{ color: '#94a3b8' }}
           itemStyle={{ color }}
+          formatter={(v: any) => [`${Number(v).toFixed(2)}${unit}`, 'avg']}
         />
         <Line type="monotone" dataKey="value" stroke={color} dot={false} strokeWidth={2} />
       </LineChart>
@@ -197,7 +216,7 @@ export default function Dashboard() {
           {activeSensors.map((sensor) => {
             const meta = SENSOR_META[sensor] ?? { color: '#a78bfa', unit: '', label: sensor }
             return (
-              <div key={sensor} className="bg-slate-800 rounded-xl p-4">
+              <div key={`${selectedId}-${sensor}-${hours}`} className="bg-slate-800 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="text-sm font-medium text-white">{selectedDevice?.name}</p>
@@ -210,6 +229,7 @@ export default function Dashboard() {
                   sensorType={sensor}
                   color={meta.color}
                   unit={meta.unit}
+                  hours={hours}
                 />
               </div>
             )

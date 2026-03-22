@@ -5,7 +5,7 @@ import strawberry
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.types.schema import AlertSummaryType, AlertType, DeviceSummaryType, DeviceType, SensorReadingType
+from app.types.schema import AlertSummaryType, AlertType, BucketedReadingType, DeviceSummaryType, DeviceType, SensorReadingType
 
 
 async def resolve_readings(
@@ -13,6 +13,7 @@ async def resolve_readings(
     device_id: Optional[str] = None,
     sensor_type: Optional[str] = None,
     limit: int = 100,
+    hours: Optional[int] = None,
 ) -> List[SensorReadingType]:
     session_factory = info.context["session_factory"]
     async with session_factory() as session:
@@ -25,6 +26,10 @@ async def resolve_readings(
         if sensor_type:
             conditions.append("sensor_type = :sensor_type")
             params["sensor_type"] = sensor_type
+        if hours is not None:
+            since = datetime.now(timezone.utc) - timedelta(hours=hours)
+            conditions.append("recorded_at >= :since")
+            params["since"] = since
 
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
@@ -165,3 +170,48 @@ async def resolve_alert_summary(info: strawberry.types.Info) -> AlertSummaryType
         )
         r = result.fetchone()
         return AlertSummaryType(total=r[0], active=r[1], critical=r[2], warning=r[3])
+
+
+async def resolve_bucketed_readings(
+    info: strawberry.types.Info,
+    device_id: str,
+    sensor_type: str,
+    hours: int = 24,
+    bucket_minutes: int = 30,
+) -> List[BucketedReadingType]:
+    session_factory = info.context["session_factory"]
+    async with session_factory() as session:
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        result = await session.execute(
+            text("""
+                SELECT
+                    time_bucket(:bucket_interval, recorded_at) AS bucket,
+                    AVG(value)::float   AS avg_value,
+                    MIN(value)::float   AS min_value,
+                    MAX(value)::float   AS max_value,
+                    COUNT(*)            AS reading_count
+                FROM iot.sensor_readings
+                WHERE device_id = :device_id
+                  AND sensor_type = :sensor_type
+                  AND recorded_at >= :since
+                GROUP BY bucket
+                ORDER BY bucket ASC
+            """),
+            {
+                "bucket_interval": timedelta(minutes=bucket_minutes),
+                "device_id": device_id,
+                "sensor_type": sensor_type,
+                "since": since,
+            },
+        )
+        rows = result.fetchall()
+        return [
+            BucketedReadingType(
+                bucket=r[0],
+                avg_value=r[1],
+                min_value=r[2],
+                max_value=r[3],
+                reading_count=r[4],
+            )
+            for r in rows
+        ]

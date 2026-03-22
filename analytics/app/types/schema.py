@@ -52,3 +52,12 @@ class AlertType:
     severity: str
     status: str
     created_at: datetime
+
+
+@strawberry.type
+class BucketedReadingType:
+    bucket: datetime
+    avg_value: float
+    min_value: float
+    max_value: float
+    reading_count: int
