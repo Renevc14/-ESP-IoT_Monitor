@@ -6,7 +6,7 @@ from redis.asyncio import Redis
 
 from app.config import settings
 from app.middleware.rate_limiter import rate_limit_middleware
-from app.routers import alert_rules, auth, devices, users
+from app.routers import alert_rules, alerts_proxy, auth, devices, users
 
 
 @asynccontextmanager
@@ -43,6 +43,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(devices.router)
 app.include_router(alert_rules.router)
+app.include_router(alerts_proxy.router)
 
 
 @app.get("/health", tags=["Health"])
