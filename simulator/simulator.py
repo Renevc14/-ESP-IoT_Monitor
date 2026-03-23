@@ -121,7 +121,12 @@ def run_continuous(client: GatewayClient) -> None:
     logger.info("Mode: CONTINUOUS — interval=%ds — Ctrl+C to stop", INTERVAL)
     total = 0
     while True:
-        weather = fetch_conditions()
+        try:
+            weather = fetch_conditions()
+        except RuntimeError as exc:
+            logger.error("Skipping cycle — %s — retrying in %ds", exc, INTERVAL)
+            time.sleep(INTERVAL)
+            continue
         published = emit_cycle(client, weather)
         total += published
         logger.info("Cycle complete — %d readings published (total: %d)", published, total)
