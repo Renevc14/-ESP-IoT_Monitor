@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Bell, Cpu, LayoutDashboard, LogOut, SlidersHorizontal, Users } from 'lucide-react'
+import { Activity, BarChart3, Bell, Cpu, HeartPulse, LayoutDashboard, LogOut, Menu, ScrollText, SlidersHorizontal, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -10,6 +10,7 @@ export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [activeAlerts, setActiveAlerts] = useState(0)
+  const [navOpen, setNavOpen] = useState(false)
 
   useEffect(() => {
     function fetchCount() {
@@ -22,6 +23,9 @@ export default function Layout() {
     return () => clearInterval(id)
   }, [])
 
+  // Cerrar el drawer móvil al navegar
+  useEffect(() => setNavOpen(false), [location.pathname])
+
   function handleLogout() {
     logout()
     navigate('/login')
@@ -33,8 +37,12 @@ export default function Layout() {
     { to: '/alert-rules', icon: SlidersHorizontal, label: 'Alert Rules', badge: 0            },
     { to: '/alerts',      icon: Bell,              label: 'Alerts',      badge: activeAlerts },
     { to: '/analytics',   icon: BarChart3,         label: 'Analytics',   badge: 0            },
+    { to: '/health',      icon: HeartPulse,        label: 'Salud',       badge: 0            },
     ...(user?.role === 'admin'
-      ? [{ to: '/users', icon: Users, label: 'Users', badge: 0 }]
+      ? [
+          { to: '/users', icon: Users, label: 'Users', badge: 0 },
+          { to: '/logs', icon: ScrollText, label: 'Logs', badge: 0 },
+        ]
       : []),
   ]
 
@@ -42,8 +50,15 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
+      {navOpen && <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setNavOpen(false)} />}
+
       {/* Sidebar */}
-      <aside className="w-60 shrink-0 flex flex-col border-r border-line bg-surface">
+      <aside
+        className={cn(
+          'fixed lg:static inset-y-0 left-0 z-40 w-60 shrink-0 flex flex-col border-r border-line bg-surface transition-transform duration-200',
+          navOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        )}
+      >
         <div className="flex items-center gap-2.5 px-5 h-16 border-b border-line">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/15 text-accent">
             <Activity size={18} />
@@ -54,7 +69,7 @@ export default function Layout() {
           </div>
         </div>
 
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {NAV.map(({ to, icon: Icon, label, badge }) => (
             <NavLink key={to} to={to} end={to === '/'}>
               {({ isActive }) => (
@@ -87,23 +102,31 @@ export default function Layout() {
               <p className="text-xs font-medium text-foreground truncate">{user?.email}</p>
               <p className="text-[11px] text-faint capitalize">{user?.role}</p>
             </div>
-            <button
-              onClick={handleLogout}
-              title="Cerrar sesión"
-              className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-surface-2"
-            >
+            <button onClick={handleLogout} title="Cerrar sesión" className="text-faint hover:text-danger transition-colors p-1.5 rounded-lg hover:bg-surface-2">
               <LogOut size={16} />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div key={location.pathname} className="mx-auto max-w-[1400px] px-8 py-7 animate-fade-up">
-          <Outlet />
-        </div>
-      </main>
+      {/* Main */}
+      <div className="flex-1 flex flex-col min-w-0">
+        <header className="lg:hidden flex items-center gap-3 h-14 border-b border-line bg-surface px-4">
+          <button onClick={() => setNavOpen(true)} className="text-muted hover:text-foreground">
+            <Menu size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <Activity className="text-accent" size={18} />
+            <span className="font-semibold text-sm">IoT Monitor</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-auto">
+          <div key={location.pathname} className="mx-auto max-w-[1400px] px-4 sm:px-8 py-6 animate-fade-up">
+            <Outlet />
+          </div>
+        </main>
+      </div>
     </div>
   )
 }

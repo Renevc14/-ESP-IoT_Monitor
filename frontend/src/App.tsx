@@ -8,7 +8,11 @@ import Alerts from './pages/Alerts'
 import Analytics from './pages/Analytics'
 import Dashboard from './pages/Dashboard'
 import Devices from './pages/Devices'
+import ForgotPassword from './pages/ForgotPassword'
+import Health from './pages/Health'
 import Login from './pages/Login'
+import Logs from './pages/Logs'
+import ResetPassword from './pages/ResetPassword'
 import Users from './pages/Users'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -20,6 +24,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/"
         element={
@@ -34,6 +40,8 @@ function AppRoutes() {
         <Route path="alerts" element={<Alerts />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="users" element={<Users />} />
+        <Route path="logs" element={<Logs />} />
+        <Route path="health" element={<Health />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
