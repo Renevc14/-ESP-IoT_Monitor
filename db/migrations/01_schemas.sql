@@ -1,10 +1,11 @@
 -- ============================================================
 -- Migration 01: Schemas + TimescaleDB extension
--- Run this FIRST against your Supabase project
+-- Runs automatically on first start of the postgres-timescale container
+-- (mounted under /docker-entrypoint-initdb.d). For a managed/cloud
+-- PostgreSQL, run scripts 01..06 in order against DATABASE_URL.
 -- ============================================================
 
--- Enable TimescaleDB (must be done via Supabase Dashboard first:
---   Database -> Extensions -> timescaledb -> Enable)
+-- Enable TimescaleDB (preloaded by the timescale/timescaledb image)
 CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;
 
 -- Enable UUID generation

@@ -7,15 +7,16 @@ CREATE TYPE alerts.alert_status AS ENUM ('active', 'acknowledged', 'resolved');
 CREATE TYPE alerts.rule_operator AS ENUM ('gt', 'lt', 'gte', 'lte');
 
 CREATE TABLE alerts.alert_rules (
-    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    device_id   UUID NOT NULL REFERENCES iot.devices(id) ON DELETE CASCADE,
-    sensor_type iot.sensor_type NOT NULL,
-    operator    alerts.rule_operator NOT NULL,
-    threshold   DECIMAL(10, 4) NOT NULL,
-    severity    alerts.severity_level NOT NULL,
-    is_active   BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id           UUID NOT NULL REFERENCES iot.devices(id) ON DELETE CASCADE,
+    sensor_type         iot.sensor_type NOT NULL,
+    operator            alerts.rule_operator NOT NULL,
+    threshold           DECIMAL(10, 4) NOT NULL,
+    severity            alerts.severity_level NOT NULL,
+    notification_emails TEXT[] NOT NULL DEFAULT '{}',
+    is_active           BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX idx_alert_rules_device ON alerts.alert_rules (device_id, sensor_type, is_active);
@@ -28,6 +29,8 @@ CREATE TABLE alerts.alerts (
     severity        alerts.severity_level NOT NULL,
     status          alerts.alert_status NOT NULL DEFAULT 'active',
     acknowledged_by UUID REFERENCES auth.users(id),
+    acknowledged_at TIMESTAMPTZ,
+    resolved_at     TIMESTAMPTZ,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
