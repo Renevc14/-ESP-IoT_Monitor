@@ -1,4 +1,4 @@
-import { Bell } from 'lucide-react'
+import { Bell, Check, CheckCheck } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import { Badge } from '../components/ui/Badge'
@@ -190,11 +190,26 @@ export default function Alerts() {
                   <td className={`${TD} text-faint text-xs tnum`}>{a.created_at ? new Date(a.created_at).toLocaleString() : '—'}</td>
                   <td className={TD}>
                     <div className="flex gap-2 justify-end">
-                      {a.status === 'active' && <Button variant="secondary" size="sm" onClick={() => acknowledge(a.id)}>Reconocer</Button>}
+                      {a.status === 'active' && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => acknowledge(a.id)}
+                          title="Reconocer: marcar la alerta como vista / en atención"
+                        >
+                          <Check size={14} /> Reconocer
+                        </Button>
+                      )}
                       {a.status !== 'resolved' && (
-                        <button onClick={() => resolve(a.id)} className="text-xs font-medium text-success hover:underline underline-offset-2 px-1">
-                          Resolver
-                        </button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => resolve(a.id)}
+                          title="Resolver: marcar la alerta como solucionada"
+                          className="text-success"
+                        >
+                          <CheckCheck size={14} /> Resolver
+                        </Button>
                       )}
                     </div>
                   </td>
