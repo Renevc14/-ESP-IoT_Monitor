@@ -1,5 +1,25 @@
 services:
   # ─── Infrastructure ───────────────────────────────────────────
+  postgres-timescale:
+    image: timescale/timescaledb:latest-pg16
+    container_name: iot-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-iot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iot}
+      POSTGRES_DB: ${POSTGRES_DB:-iot}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iot} -d ${POSTGRES_DB:-iot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [iot_network]
+
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: iot-rabbitmq
@@ -9,12 +29,15 @@ services:
     ports:
       - "5672:5672"
       - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    networks: [iot_network]
 
   redis:
     image: redis:7-alpine
@@ -22,12 +45,25 @@ services:
     command: redis-server --appendonly yes
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    networks: [iot_network]
+
+  # MailHog: SMTP de demostración para notificaciones de alertas (UI en :8025)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: iot-mailhog
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+    networks: [iot_network]
 
   # ─── Backend Microservices ────────────────────────────────────
   gateway:
@@ -38,7 +74,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
       REDIS_URL: redis://redis:6379
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_ALGORITHM: HS256
@@ -48,6 +84,8 @@ services:
       ANALYTICS_SERVICE_URL: http://analytics:8004
       ALERTS_URL: http://alerts:8003
     depends_on:
+      postgres-timescale:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -56,6 +94,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks: [iot_network]
 
   ingestion:
     build:
@@ -77,6 +116,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks: [iot_network]
 
   processing:
     build:
@@ -86,13 +126,15 @@ services:
     ports:
       - "8002:8002"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
       EXCHANGE_NAME: sensor_data_exchange
       QUEUE_NAME: processing_queue
       REDIS_CACHE_TTL: 300
     depends_on:
+      postgres-timescale:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       redis:
@@ -103,6 +145,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks: [iot_network]
 
   alerts:
     build:
@@ -112,19 +155,29 @@ services:
     ports:
       - "8003:8003"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
       EXCHANGE_NAME: sensor_data_exchange
       QUEUE_NAME: alerts_queue
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-alerts@iot.local}
+      ALERT_EMAILS: ${ALERT_EMAILS:-}
     depends_on:
+      postgres-timescale:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks: [iot_network]
 
   analytics:
     build:
@@ -134,13 +187,17 @@ services:
     ports:
       - "8004:8004"
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
+    depends_on:
+      postgres-timescale:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks: [iot_network]
 
   # ─── Simulator ───────────────────────────────────────────────
   simulator:
@@ -163,6 +220,7 @@ services:
     profiles:
       - simulator
     restart: "no"
+    networks: [iot_network]
 
   # ─── Frontend ────────────────────────────────────────────────
   frontend:
@@ -180,3 +238,14 @@ services:
       gateway:
         condition: service_healthy
     restart: unless-stopped
+    networks: [iot_network]
+
+# ─── Networks & Volumes ──────────────────────────────────────────
+networks:
+  iot_network:
+    driver: bridge
+
+volumes:
+  pg-data:
+  rabbitmq-data:
+  redis-data:
