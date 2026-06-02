@@ -7,9 +7,9 @@ import { SensorChart } from '../components/SensorChart'
 import { buttonClasses } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Select } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Segmented } from '../components/ui/Segmented'
+import { SelectMenu } from '../components/ui/SelectMenu'
 import { StatCard } from '../components/ui/StatCard'
 import { THRESHOLDS } from '../lib/thresholds'
 
@@ -94,15 +94,9 @@ export default function Analytics() {
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        <Select value={deviceId} onChange={(e) => setDeviceId(e.target.value)} className="w-52">
-          {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </Select>
-        <Select value={sensorType} onChange={(e) => setSensorType(e.target.value)} className="w-36">
-          {SENSORS.map((s) => <option key={s} value={s}>{s}</option>)}
-        </Select>
-        <Select value={agg} onChange={(e) => setAgg(e.target.value as any)} className="w-36">
-          {AGGREGATIONS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-        </Select>
+        <SelectMenu value={deviceId} onChange={setDeviceId} options={devices.map((d) => ({ value: d.id, label: d.name }))} className="w-52" />
+        <SelectMenu value={sensorType} onChange={setSensorType} options={SENSORS.map((s) => ({ value: s, label: s }))} className="w-36" />
+        <SelectMenu value={agg} onChange={(v) => setAgg(v as any)} options={AGGREGATIONS.map((a) => ({ value: a.key, label: a.label }))} className="w-40" />
         <Segmented options={PERIODS} value={hours} onChange={setHours} />
       </div>
 

@@ -6,9 +6,11 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Input, Label, Select } from '../components/ui/Field'
+import { Input, Label } from '../components/ui/Field'
+import { Loading } from '../components/ui/Loading'
 import { Modal } from '../components/ui/Modal'
 import { PageHeader } from '../components/ui/PageHeader'
+import { SelectMenu } from '../components/ui/SelectMenu'
 import { useAuth } from '../context/AuthContext'
 
 interface Device { id: string; name: string }
@@ -108,25 +110,34 @@ export default function AlertRules() {
     setRules((prev) => prev.filter((r) => r.id !== id))
   }
 
-  if (loading) return <p className="text-sm text-faint">Cargando…</p>
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Reglas de alerta" subtitle="Umbrales por dispositivo y tipo de sensor" />
+        <Loading />
+      </div>
+    )
+  }
 
   return (
     <div>
       <PageHeader title="Reglas de alerta" subtitle="Umbrales por dispositivo y tipo de sensor">
-        <Select
-          value={filterDeviceId}
-          onChange={(e) => (e.target.value ? setSearchParams({ device_id: e.target.value }) : setSearchParams({}))}
-          className="w-48"
-        >
-          <option value="">Todos los dispositivos</option>
-          {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </Select>
         {isAdmin && (
           <Button size="sm" onClick={() => { setForm({ ...form, device_id: filterDeviceId || (devices[0]?.id ?? '') }); setShowCreate(true) }}>
             <Plus size={15} /> Nueva regla
           </Button>
         )}
       </PageHeader>
+
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xs text-faint">Dispositivo</span>
+        <SelectMenu
+          value={filterDeviceId}
+          onChange={(v) => (v ? setSearchParams({ device_id: v }) : setSearchParams({}))}
+          options={[{ value: '', label: 'Todos los dispositivos' }, ...devices.map((d) => ({ value: d.id, label: d.name }))]}
+          className="w-56"
+        />
+      </div>
 
       {rules.length === 0 ? (
         <EmptyState icon={<SlidersHorizontal size={28} />} title="No hay reglas configuradas" />
@@ -171,30 +182,22 @@ export default function AlertRules() {
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <Label>Dispositivo</Label>
-              <Select value={form.device_id} onChange={(e) => setForm({ ...form, device_id: e.target.value })} required>
-                {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </Select>
+              <SelectMenu value={form.device_id} onChange={(v) => setForm({ ...form, device_id: v })} options={devices.map((d) => ({ value: d.id, label: d.name }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Sensor</Label>
-                <Select value={form.sensor_type} onChange={(e) => setForm({ ...form, sensor_type: e.target.value })}>
-                  {SENSOR_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </Select>
+                <SelectMenu value={form.sensor_type} onChange={(v) => setForm({ ...form, sensor_type: v })} options={SENSOR_TYPES.map((s) => ({ value: s, label: s }))} />
               </div>
               <div>
                 <Label>Severidad</Label>
-                <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
-                  {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
-                </Select>
+                <SelectMenu value={form.severity} onChange={(v) => setForm({ ...form, severity: v })} options={SEVERITIES.map((s) => ({ value: s, label: s }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Operador</Label>
-                <Select value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })}>
-                  {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </Select>
+                <SelectMenu value={form.operator} onChange={(v) => setForm({ ...form, operator: v })} options={OPERATORS.map((o) => ({ value: o.value, label: o.label }))} />
               </div>
               <div>
                 <Label>Umbral</Label>

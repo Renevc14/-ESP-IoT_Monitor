@@ -8,9 +8,9 @@ import { Badge } from '../components/ui/Badge'
 import { Card, CardHeader } from '../components/ui/Card'
 import { cn } from '../components/ui/cn'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Select } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Segmented } from '../components/ui/Segmented'
+import { SelectMenu } from '../components/ui/SelectMenu'
 import { StatCard } from '../components/ui/StatCard'
 import { STATUS_LABEL, STATUS_TEXT, STATUS_TONE, THRESHOLDS, statusFor } from '../lib/thresholds'
 
@@ -100,9 +100,7 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Monitoreo en tiempo real de sensores IoT">
-        <Select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="w-52">
-          {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </Select>
+        <SelectMenu value={selectedId} onChange={setSelectedId} options={devices.map((d) => ({ value: d.id, label: d.name }))} className="w-52" />
         <Segmented options={TIME_OPTIONS} value={hours} onChange={setHours} />
       </PageHeader>
 
