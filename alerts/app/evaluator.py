@@ -5,7 +5,9 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.config import settings
 from app.models.alert import Alert, AlertRule
+from app.notifier import send_alert_email
 from app.ws_manager import manager
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,17 @@ async def evaluate(message: dict, session_factory: async_sessionmaker) -> None:
                     alert.severity.upper(), device_id, sensor_type,
                     value, message.get("unit", ""),
                     rule.operator, rule.threshold,
+                )
+
+                recipients = list(rule.notification_emails or []) or settings.alert_emails_list
+                await send_alert_email(
+                    recipients,
+                    device_id=str(device_id),
+                    sensor_type=sensor_type,
+                    value=value,
+                    threshold=float(rule.threshold),
+                    operator=rule.operator,
+                    severity=alert.severity,
                 )
 
 

@@ -1,13 +1,15 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.dependencies import require_admin, require_operator
 from app.models.device import AlertRule, Device
+from app.models.user import User
 from app.schemas.device import AlertRuleCreate, AlertRuleResponse, AlertRuleUpdate
+from app.services.audit_service import client_ip, log_event
 
 router = APIRouter(prefix="/alert-rules", tags=["Alert Rules"])
 
@@ -28,8 +30,9 @@ async def list_alert_rules(
 @router.post("", response_model=AlertRuleResponse, status_code=status.HTTP_201_CREATED)
 async def create_alert_rule(
     body: AlertRuleCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_admin),
+    actor: User = Depends(require_admin),
 ):
     # Verify device exists
     device = await db.get(Device, body.device_id)
@@ -42,10 +45,18 @@ async def create_alert_rule(
         operator=body.operator,
         threshold=body.threshold,
         severity=body.severity,
+        notification_emails=body.notification_emails,
     )
     db.add(rule)
     await db.commit()
     await db.refresh(rule)
+    await log_event(
+        "alert_rule_created",
+        user_id=actor.id,
+        resource=f"alert_rule:{rule.id}",
+        ip=client_ip(request),
+        details={"device_id": str(rule.device_id), "sensor_type": body.sensor_type.value},
+    )
     return rule
 
 
@@ -69,11 +80,18 @@ async def update_alert_rule(
 @router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_alert_rule(
     rule_id: uuid.UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    _=Depends(require_admin),
+    actor: User = Depends(require_admin),
 ):
     rule = await db.get(AlertRule, rule_id)
     if not rule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert rule not found")
     await db.delete(rule)
     await db.commit()
+    await log_event(
+        "alert_rule_deleted",
+        user_id=actor.id,
+        resource=f"alert_rule:{rule_id}",
+        ip=client_ip(request),
+    )

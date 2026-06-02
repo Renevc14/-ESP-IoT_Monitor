@@ -40,6 +40,7 @@ class AlertRuleCreate(BaseModel):
     operator: AlertOperator
     threshold: float
     severity: AlertSeverity
+    notification_emails: list[str] = []
 
 
 class AlertRuleResponse(BaseModel):
@@ -49,6 +50,7 @@ class AlertRuleResponse(BaseModel):
     operator: AlertOperator
     threshold: float
     severity: AlertSeverity
+    notification_emails: list[str]
     is_active: bool
     created_at: datetime
 
@@ -58,4 +60,5 @@ class AlertRuleResponse(BaseModel):
 class AlertRuleUpdate(BaseModel):
     threshold: float | None = None
     severity: AlertSeverity | None = None
+    notification_emails: list[str] | None = None
     is_active: bool | None = None

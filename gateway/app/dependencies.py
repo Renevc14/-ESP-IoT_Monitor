@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy import select
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.models.user import User, UserRole
+from app.services.audit_service import client_ip, log_event
 from app.services.auth_service import decode_token
 
 bearer = HTTPBearer()
@@ -39,8 +40,15 @@ async def get_current_user(
 
 
 def require_role(*roles: UserRole):
-    async def _check(current_user: User = Depends(get_current_user)) -> User:
+    async def _check(request: Request, current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in roles:
+            await log_event(
+                "access_denied",
+                user_id=current_user.id,
+                resource=f"{request.method} {request.url.path}",
+                ip=client_ip(request),
+                details={"role": current_user.role.value, "required": [r.value for r in roles]},
+            )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Required role: {[r.value for r in roles]}",
