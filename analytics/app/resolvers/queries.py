@@ -64,12 +64,14 @@ async def resolve_device_summary(
                 SELECT
                     device_id,
                     sensor_type,
-                    AVG(value)::float   AS avg_value,
-                    MIN(value)::float   AS min_value,
-                    MAX(value)::float   AS max_value,
-                    COUNT(*)            AS reading_count,
-                    MIN(recorded_at)    AS period_start,
-                    MAX(recorded_at)    AS period_end
+                    AVG(value)::float                                           AS avg_value,
+                    MIN(value)::float                                           AS min_value,
+                    MAX(value)::float                                           AS max_value,
+                    percentile_cont(0.95) WITHIN GROUP (ORDER BY value)::float  AS p95_value,
+                    (last(value, recorded_at) - first(value, recorded_at))::float AS trend,
+                    COUNT(*)                                                    AS reading_count,
+                    MIN(recorded_at)                                            AS period_start,
+                    MAX(recorded_at)                                            AS period_end
                 FROM iot.sensor_readings
                 WHERE device_id = :device_id AND recorded_at >= :since
                 GROUP BY device_id, sensor_type
@@ -84,9 +86,11 @@ async def resolve_device_summary(
                 avg_value=r[2],
                 min_value=r[3],
                 max_value=r[4],
-                reading_count=r[5],
-                period_start=r[6],
-                period_end=r[7],
+                p95_value=r[5],
+                trend=r[6],
+                reading_count=r[7],
+                period_start=r[8],
+                period_end=r[9],
             )
             for r in rows
         ]
