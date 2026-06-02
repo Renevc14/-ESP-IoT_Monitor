@@ -1,5 +1,6 @@
 import uuid
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -39,6 +40,8 @@ async def list_alerts(
                 "status": a.status,
                 "triggered_value": float(a.triggered_value),
                 "created_at": a.created_at.isoformat(),
+                "acknowledged_at": a.acknowledged_at.isoformat() if a.acknowledged_at else None,
+                "resolved_at": a.resolved_at.isoformat() if a.resolved_at else None,
             }
             for a in alerts
         ]
@@ -62,6 +65,30 @@ async def acknowledge_alert(
             raise HTTPException(status_code=409, detail=f"Alert is already {alert.status}")
 
         alert.status = "acknowledged"
+        alert.acknowledged_at = datetime.now(timezone.utc)
+        await session.commit()
+        return {"id": str(alert.id), "status": alert.status}
+
+
+@router.patch("/alerts/{alert_id}/resolve", tags=["Alerts"])
+async def resolve_alert(
+    alert_id: uuid.UUID,
+    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    session_factory: async_sessionmaker = Depends(_get_session_factory),
+):
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
+
+    async with session_factory() as session:
+        result = await session.execute(select(Alert).where(Alert.id == alert_id))
+        alert = result.scalar_one_or_none()
+        if not alert:
+            raise HTTPException(status_code=404, detail="Alert not found")
+        if alert.status == "resolved":
+            raise HTTPException(status_code=409, detail="Alert is already resolved")
+
+        alert.status = "resolved"
+        alert.resolved_at = datetime.now(timezone.utc)
         await session.commit()
         return {"id": str(alert.id), "status": alert.status}
 

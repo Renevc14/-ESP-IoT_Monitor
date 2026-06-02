@@ -33,14 +33,29 @@ async def acknowledge_alert(
     request: Request,
     _=Depends(get_current_user),
 ):
+    return await _proxy_action(alert_id, "acknowledge", request)
+
+
+@router.patch("/alerts/{alert_id}/resolve")
+async def resolve_alert(
+    alert_id: uuid.UUID,
+    request: Request,
+    _=Depends(get_current_user),
+):
+    return await _proxy_action(alert_id, "resolve", request)
+
+
+async def _proxy_action(alert_id: uuid.UUID, action: str, request: Request):
     token = request.headers.get("Authorization", "")
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
             resp = await client.patch(
-                f"{settings.alerts_url}/alerts/{alert_id}/acknowledge",
+                f"{settings.alerts_url}/alerts/{alert_id}/{action}",
                 headers={"Authorization": token},
             )
             resp.raise_for_status()
             return resp.json()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
         except httpx.HTTPError as exc:
             raise HTTPException(status_code=502, detail=f"Alerts service unavailable: {exc}")
