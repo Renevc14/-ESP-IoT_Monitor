@@ -19,10 +19,25 @@ async def lifespan(app: FastAPI):
     await app.state.redis.aclose()
 
 
+tags_metadata = [
+    {"name": "Authentication", "description": "Login y refresh de JWT (access 15 min, refresh 7 días con rotación)."},
+    {"name": "Users", "description": "Gestión de usuarios y roles RBAC admin/operator/viewer (solo admin)."},
+    {"name": "Devices", "description": "Alta, baja y modificación de dispositivos IoT (solo admin)."},
+    {"name": "Alert Rules", "description": "Configuración de umbrales de alerta por dispositivo y sensor."},
+    {"name": "Alerts", "description": "Consulta, reconocimiento y resolución de alertas (proxy al servicio de alertas)."},
+    {"name": "Health", "description": "Estado operativo del servicio."},
+]
+
 app = FastAPI(
     title="IoT API Gateway",
-    description="API Gateway — JWT authentication, RBAC, rate limiting",
+    description=(
+        "Punto de entrada único de la plataforma de monitoreo IoT. "
+        "Centraliza autenticación JWT, autorización RBAC, rate limiting, "
+        "headers de seguridad (OWASP A05) y auditoría de accesos (OWASP A09)."
+    ),
     version="1.0.0",
+    openapi_tags=tags_metadata,
+    contact={"name": "Rene Vilela", "email": "rene.vilela@ucb.edu.bo"},
     lifespan=lifespan,
 )
 
