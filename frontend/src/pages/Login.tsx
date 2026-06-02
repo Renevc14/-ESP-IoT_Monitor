@@ -32,7 +32,7 @@ export default function Login() {
       {/* glow de acento */}
       <div
         className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 h-[420px] w-[620px] rounded-full opacity-25 blur-[120px]"
-        style={{ background: 'radial-gradient(closest-side, #6366f1, transparent)' }}
+        style={{ background: 'radial-gradient(closest-side, #22d3ee, transparent)' }}
       />
 
       <div className="relative w-full max-w-sm">

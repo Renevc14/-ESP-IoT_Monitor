@@ -11,6 +11,7 @@ import { Select } from '../components/ui/Field'
 import { PageHeader } from '../components/ui/PageHeader'
 import { Segmented } from '../components/ui/Segmented'
 import { StatCard } from '../components/ui/StatCard'
+import { THRESHOLDS } from '../lib/thresholds'
 
 const ANALYTICS_URL = import.meta.env.VITE_ANALYTICS_URL ?? 'http://localhost:8004'
 
@@ -49,7 +50,7 @@ const PERIODS = [
   { label: '7d', value: 168 },
   { label: '30d', value: 720 },
 ]
-const SENSOR_COLOR: Record<string, string> = { temperature: '#f97316', humidity: '#38bdf8', energy: '#34d399' }
+const SENSOR_COLOR: Record<string, string> = { temperature: '#fb923c', humidity: '#22d3ee', energy: '#34d399' }
 
 interface Device { id: string; name: string }
 
@@ -119,7 +120,7 @@ export default function Analytics() {
           {chartData.length === 0 ? (
             <EmptyState title="Sin datos para el periodo seleccionado" />
           ) : (
-            <SensorChart data={chartData} color={SENSOR_COLOR[sensorType] ?? '#6366f1'} height={300} />
+            <SensorChart data={chartData} color={SENSOR_COLOR[sensorType] ?? '#22d3ee'} height={300} thresholds={THRESHOLDS[sensorType]} />
           )}
         </div>
       </Card>
