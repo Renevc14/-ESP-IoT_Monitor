@@ -164,8 +164,8 @@ export default function Alerts() {
       {visible.length === 0 ? (
         <EmptyState icon={<Bell size={28} />} title={alerts.length === 0 ? 'No hay alertas todavía' : 'Ninguna alerta coincide con los filtros'} />
       ) : (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr>
                 <th className={TH}>Dispositivo</th>

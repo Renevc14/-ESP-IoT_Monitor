@@ -45,6 +45,7 @@ export default function Devices() {
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: '', device_type: 'multi_sensor', location: '', auth_token: '' })
   const [formError, setFormError] = useState('')
+  const [createdToken, setCreatedToken] = useState<string | null>(null)
 
   function loadDevices() {
     return api.get('/devices')
@@ -58,19 +59,20 @@ export default function Devices() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     setFormError('')
-    if (form.auth_token.length < 8) { setFormError('El token debe tener al menos 8 caracteres'); return }
+    if (form.auth_token && form.auth_token.length < 8) { setFormError('El token debe tener al menos 8 caracteres'); return }
     setCreating(true)
     try {
-      await api.post('/devices', {
+      const { data } = await api.post('/devices', {
         name: form.name,
         device_type: form.device_type,
         location: form.location || null,
-        auth_token: form.auth_token,
+        ...(form.auth_token ? { auth_token: form.auth_token } : {}),
       })
       setShowCreate(false)
       setForm({ name: '', device_type: 'multi_sensor', location: '', auth_token: '' })
       setLoading(true)
       await loadDevices()
+      if (data?.auth_token) setCreatedToken(data.auth_token)
     } catch (err: any) {
       setFormError(err.response?.data?.detail ?? 'No se pudo crear el dispositivo')
     } finally {
@@ -112,8 +114,8 @@ export default function Devices() {
       {devices.length === 0 ? (
         <EmptyState icon={<Cpu size={28} />} title="No hay dispositivos registrados" />
       ) : (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
             <thead>
               <tr>
                 <th className={TH}>Nombre</th>
@@ -170,8 +172,8 @@ export default function Devices() {
               <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Data Center - Rack A1" />
             </div>
             <div>
-              <Label>Token de autenticación (mín. 8)</Label>
-              <Input value={form.auth_token} onChange={(e) => setForm({ ...form, auth_token: e.target.value })} placeholder="device-secret-token" minLength={8} required />
+              <Label>Token de autenticación (opcional)</Label>
+              <Input value={form.auth_token} onChange={(e) => setForm({ ...form, auth_token: e.target.value })} placeholder="Se genera automáticamente si lo dejas vacío" />
             </div>
             {formError && <p className="text-sm text-danger">{formError}</p>}
             <div className="flex gap-2 justify-end pt-1">
@@ -179,6 +181,21 @@ export default function Devices() {
               <Button type="submit" disabled={creating}>{creating ? 'Registrando…' : 'Registrar'}</Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {createdToken && (
+        <Modal title="Token del dispositivo" onClose={() => setCreatedToken(null)}>
+          <p className="text-sm text-muted mb-3">
+            Copia este token ahora — por seguridad <span className="text-foreground">no se volverá a mostrar</span>.
+          </p>
+          <div className="flex items-center gap-2">
+            <code className="flex-1 rounded-lg border border-line bg-surface-2 px-3 py-2 text-sm text-accent font-mono break-all">{createdToken}</code>
+            <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(createdToken)}>Copiar</Button>
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => setCreatedToken(null)}>Entendido</Button>
+          </div>
         </Modal>
       )}
     </div>
