@@ -40,26 +40,28 @@ Users / IoT Simulator
        │
   ┌────┴──────────┐
   ▼               ▼
-[Timescale Cloud]  [Redis :6379]
-PostgreSQL 16      Cache · Rate limiting
+[postgres-timescale]  [Redis :6379]
+PostgreSQL 16          Cache · Rate limiting
 + TimescaleDB
-  (external)
+  (contenedor local)
 ```
 
-### Containers (8 total)
+### Containers (10 total)
 
 | Container | Port | Description |
 |-----------|------|-------------|
-| `gateway` | 8000 | API Gateway — JWT auth, RBAC, routing, rate limiting |
+| `gateway` | 8000 | API Gateway — JWT auth, RBAC, routing, rate limiting, security headers, audit |
 | `ingestion` | 8001 | IoT data ingestion — validates and publishes to RabbitMQ |
 | `processing` | 8002 | Event consumer — stores readings in TimescaleDB + Redis |
-| `alerts` | 8003 | Alert engine — threshold evaluation + WebSocket feed |
-| `analytics` | 8004 | GraphQL API (Strawberry) — historical queries and statistics |
-| `frontend` | 80 | React 18 dashboard — charts, alerts, device management |
+| `alerts` | 8003 | Alert engine — threshold evaluation + WebSocket + email (SMTP) |
+| `analytics` | 8004 | GraphQL API (Strawberry) + CSV/JSON export |
+| `frontend` | 80 | React dashboard — charts, alerts, devices, analytics, users |
+| `postgres-timescale` | 5432 | PostgreSQL 16 + TimescaleDB — migrations auto-aplicadas al primer arranque |
 | `rabbitmq` | 5672/15672 | Message broker — fanout exchange `sensor_data_exchange` |
 | `redis` | 6379 | Cache (latest readings) + rate limiting sliding window |
+| `mailhog` | 1025/8025 | SMTP de demostración para notificaciones de alertas (UI en :8025) |
 
-**Database**: Timescale Cloud (external) — PostgreSQL 16 + TimescaleDB extension
+**Database**: contenedor local `postgres-timescale` por defecto. `DATABASE_URL` puede apuntarse a Timescale Cloud (externo) sin más cambios.
 
 ---
 
@@ -69,7 +71,7 @@ PostgreSQL 16      Cache · Rate limiting
 |-------|-----------|
 | Backend services | FastAPI (Python 3.12) |
 | Messaging | RabbitMQ 3.13, AMQP, fanout exchange |
-| Database | Timescale Cloud (PostgreSQL 16 + TimescaleDB hypertable) |
+| Database | PostgreSQL 16 + TimescaleDB hypertable (contenedor local, override-able a Timescale Cloud) |
 | Cache | Redis 7 |
 | GraphQL | Strawberry 0.261.1 (Python) |
 | Frontend | React 18 + TypeScript + Vite + Tailwind CSS + Recharts + Apollo Client |
@@ -83,64 +85,47 @@ PostgreSQL 16      Cache · Rate limiting
 ### Prerequisites
 
 - Docker + Docker Compose v2
-- A [Timescale Cloud](https://cloud.timescale.com) service (PostgreSQL 16 + TimescaleDB)
-- Node.js 20 (for local frontend development only)
+- Node.js 20 (solo para desarrollo local del frontend)
+
+> No se requiere base de datos externa: el contenedor `postgres-timescale` se incluye en el stack y ejecuta las migraciones `db/migrations/01–06` automáticamente al primer arranque (volumen `pg-data`).
 
 ### 1. Configure environment
 
 ```bash
 cp .env.example .env
-# Edit .env — set your Timescale Cloud DATABASE_URL and JWT_SECRET_KEY
+# Genera un JWT_SECRET_KEY:  openssl rand -hex 32
+# (Opcional) Para usar Timescale Cloud, descomenta y ajusta DATABASE_URL en .env
 ```
 
-### 2. Run database migrations
-
-Connect to your Timescale Cloud service and execute the scripts in order:
-
-```bash
-# Using psql with your Timescale Cloud connection string:
-psql "$DATABASE_URL" -f db/migrations/01_schemas.sql
-psql "$DATABASE_URL" -f db/migrations/02_auth_tables.sql
-psql "$DATABASE_URL" -f db/migrations/03_iot_tables.sql
-psql "$DATABASE_URL" -f db/migrations/04_alerts_tables.sql
-psql "$DATABASE_URL" -f db/migrations/05_security_tables.sql
-psql "$DATABASE_URL" -f db/migrations/06_seed_data.sql
-```
-
-See `db/README.md` for detailed instructions.
-
-### 3. Start services
+### 2. Start the whole stack (one command)
 
 ```bash
 docker compose up --build -d
+# Con simulador incluido:
+docker compose --profile simulator up --build -d
 ```
 
-### 4. Verify all services
+El esquema y los datos de ejemplo (usuarios, dispositivos, reglas) se crean solos en el primer arranque.
+
+### 3. Verify all services
 
 ```bash
 docker compose ps
-# http://localhost:8000/docs     → Gateway API docs (Swagger)
+# http://localhost:8000/docs     → Gateway API docs (Swagger/OpenAPI)
 # http://localhost:8004/graphql  → GraphQL playground
+# http://localhost:8025          → MailHog (bandeja de emails de alerta)
 # http://localhost:15672         → RabbitMQ Management (guest/guest)
 # http://localhost               → Frontend dashboard
 ```
 
-### 5. Run the IoT simulator
+### 4. IoT simulator (perfil opcional)
 
 ```bash
-# Continuous mode (real Cochabamba weather, every 60s)
-docker run --rm --network <project>_default \
-  -e GATEWAY_URL=http://gateway:8000 \
-  -e INGESTION_URL=http://ingestion:8001 \
-  -e MODE=continuous -e INTERVAL=60 \
-  <project>-simulator
+# Modo continuo (clima real de Cochabamba vía Open-Meteo, cada 60s)
+docker compose --profile simulator up -d simulator
 
-# Demo mode (scripted: normal → anomaly → recovery)
-docker run --rm --network <project>_default \
-  -e GATEWAY_URL=http://gateway:8000 \
-  -e INGESTION_URL=http://ingestion:8001 \
-  -e MODE=demo \
-  <project>-simulator
+# Modo demo (guión: normal → anomalía → recuperación) — dispara alertas + emails
+MODE=demo docker compose --profile simulator up simulator
 ```
 
 ---
@@ -155,6 +140,13 @@ docker run --rm --network <project>_default \
 | POST | `/auth/login` | Login → access token + refresh token + user profile | Public |
 | POST | `/auth/refresh` | Rotate refresh token | Refresh token |
 | GET | `/users/me` | Current user profile | Any role |
+
+#### Users (admin)
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/users` | List users | admin |
+| POST | `/users` | Create user with role | admin |
+| PATCH | `/users/{id}` | Update role / active / name | admin |
 
 #### Devices
 | Method | Endpoint | Description | Auth |
@@ -178,6 +170,7 @@ docker run --rm --network <project>_default \
 |--------|----------|-------------|------|
 | GET | `/alerts` | List alerts, optional `?status=` filter | operator+ |
 | PATCH | `/alerts/{id}/acknowledge` | Acknowledge alert | operator+ |
+| PATCH | `/alerts/{id}/resolve` | Resolve alert | operator+ |
 
 ### Ingestion (`:8001`)
 
@@ -198,16 +191,22 @@ docker run --rm --network <project>_default \
 
 ```graphql
 type Query {
-  # Last N readings for a device and sensor type
-  readings(deviceId: String!, sensorType: String!, limit: Int): [SensorReadingType!]!
-
-  # Aggregate statistics per sensor type for a device over the last N hours
+  readings(deviceId: String, sensorType: String, limit: Int, hours: Int): [SensorReadingType!]!
+  # avg/min/max + percentil 95 + tendencia (cambio neto) por tipo de sensor
   deviceSummary(deviceId: String!, hours: Int!): [DeviceSummaryType!]!
-
-  # Alert counts grouped by severity and status
-  alertSummary: [AlertSummaryType!]!
+  alertSummary: AlertSummaryType!
+  devices(isActive: Boolean): [DeviceType!]!
+  alerts(deviceId: String, status: String, limit: Int): [AlertType!]!
+  # agregación temporal con time_bucket() de TimescaleDB
+  bucketedReadings(deviceId: String!, sensorType: String!, hours: Int, bucketMinutes: Int): [BucketedReadingType!]!
 }
 ```
+
+#### Export (REST, `:8004`)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/export/readings.csv` | Lecturas en CSV (filtros `device_id`, `sensor_type`, `hours`, `limit`) |
+| GET | `/export/readings.json` | Lecturas en JSON (mismos filtros) |
 
 ---
 
@@ -252,9 +251,9 @@ Three simulated outdoor stations in Cochabamba, Bolivia (real weather from Open-
 | A01 — Broken Access Control | RBAC via FastAPI `Depends` on every endpoint |
 | A02 — Cryptographic Failures | bcrypt (passlib) for passwords · JWT HS256 · TLS in production |
 | A03 — Injection | SQLAlchemy ORM — zero raw SQL string interpolation |
-| A05 — Security Misconfiguration | Restrictive CORS · per-IP rate limiting (Redis sliding window) |
+| A05 — Security Misconfiguration | Restrictive CORS · per-IP rate limiting (Redis) · security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) |
 | A07 — Auth Failures | JWT rotation on every `/auth/refresh` · 15min access / 7day refresh |
-| A09 — Logging Failures | All auth events logged in `security.audit_logs` |
+| A09 — Logging Failures | Login OK/fallido, refresh, accesos denegados (403) y CRUD registrados en `security.audit_logs` |
 
 ---
 
@@ -271,8 +270,8 @@ Schema: iot
                   → TimescaleDB hypertable (weekly chunks on recorded_at)
 
 Schema: alerts
-  alert_rules     UUID PK · device_id FK · sensor_type · operator(gt/lt/gte/lte) · threshold · severity · is_active
-  alerts          UUID PK · rule_id FK · device_id FK · triggered_value · severity · status(active/acknowledged/resolved) · created_at
+  alert_rules     UUID PK · device_id FK · sensor_type · operator(gt/lt/gte/lte) · threshold · severity · notification_emails[] · is_active
+  alerts          UUID PK · rule_id FK · device_id FK · triggered_value · severity · status(active/acknowledged/resolved) · acknowledged_at · resolved_at · created_at
 
 Schema: security
   audit_logs      BIGSERIAL PK · user_id FK · action · resource · ip · details JSONB · created_at
@@ -304,8 +303,9 @@ Schema: security
 │   └── Dockerfile
 ├── simulator/        # IoT device simulator — real Cochabamba weather (Open-Meteo)
 ├── db/
-│   └── migrations/   # SQL scripts 01–06 — run against Timescale Cloud in order
+│   └── migrations/   # SQL 01–06 — auto-montadas en postgres-timescale al primer arranque
 ├── tests/            # Integration tests (pytest + httpx)
+├── .github/workflows/ci.yml   # CI: unit (por servicio) + integración (stack completo)
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -327,6 +327,20 @@ docker compose restart ingestion
 # Run integration tests (stack must be running)
 cd tests && pip install -r requirements.txt && pytest -v
 ```
+
+### Tests & CI
+
+```bash
+# Pruebas unitarias por servicio (lógica de auth, evaluación de alertas, export)
+cd gateway   && pip install -r requirements.txt pytest pytest-asyncio pytest-cov && pytest --cov=app
+cd alerts    && pip install -r requirements.txt pytest pytest-asyncio pytest-cov && pytest --cov=app
+cd analytics && pip install -r requirements.txt pytest pytest-asyncio pytest-cov && pytest --cov=app
+
+# Pruebas de integración (3 escenarios obligatorios) contra el stack en ejecución
+pip install -r tests/requirements.txt && pytest tests/ -v
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push/PR: (1) las pruebas unitarias por servicio con cobertura y (2) las pruebas de integración levantando el stack completo con Docker Compose y esperando los healthchecks.
 
 ---
 

@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  unit:
+    name: Pruebas unitarias (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway, alerts, analytics]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar dependencias
+        run: pip install -r ${{ matrix.service }}/requirements.txt pytest pytest-asyncio pytest-cov
+      - name: Ejecutar pruebas con cobertura
+        run: cd ${{ matrix.service }} && python -m pytest --cov=app --cov-report=term-missing
+
+  integration:
+    name: Pruebas de integración (stack completo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Generar .env
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=iot
+          POSTGRES_PASSWORD=iot
+          POSTGRES_DB=iot
+          DATABASE_URL=postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot
+          JWT_SECRET_KEY=ci-secret-key-not-for-production-0123456789abcd
+          RABBITMQ_USER=guest
+          RABBITMQ_PASSWORD=guest
+          ALLOWED_ORIGINS=http://localhost
+          SMTP_HOST=mailhog
+          SMTP_PORT=1025
+          ALERT_EMAILS=ops@iot.local
+          EOF
+      - name: Levantar stack
+        run: docker compose up -d --build
+      - name: Esperar healthchecks
+        run: |
+          for port in 8000 8001 8003 8004; do
+            ready=""
+            for i in $(seq 1 60); do
+              if curl -fs "http://localhost:$port/health" >/dev/null 2>&1; then
+                echo "servicio en :$port listo"; ready=1; break
+              fi
+              sleep 3
+            done
+            if [ -z "$ready" ]; then echo "servicio en :$port no respondió"; docker compose logs; exit 1; fi
+          done
+      - name: Pruebas de integración
+        run: |
+          pip install -r tests/requirements.txt
+          python -m pytest tests/ -v
+      - name: Logs del stack (si falla)
+        if: failure()
+        run: docker compose logs --tail=150
