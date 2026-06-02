@@ -199,8 +199,13 @@ services:
       - "8004:8004"
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
+      EXCHANGE_NAME: sensor_data_exchange
+      QUEUE_NAME: analytics_queue
     depends_on:
       postgres-timescale:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]

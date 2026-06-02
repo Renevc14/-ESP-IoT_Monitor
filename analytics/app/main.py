@@ -1,12 +1,15 @@
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
+import asyncio
+
 import strawberry
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from strawberry.fastapi import GraphQLRouter
 
+from app import consumer
 from app.config import settings
 from app.routers.export import router as export_router
 from app.resolvers.queries import (
@@ -17,6 +20,7 @@ from app.resolvers.queries import (
     resolve_devices,
     resolve_readings,
 )
+from app.resolvers.subscriptions import Subscription
 from app.types.schema import AlertSummaryType, AlertType, BucketedReadingType, DeviceSummaryType, DeviceType, SensorReadingType
 
 
@@ -48,7 +52,7 @@ class Query:
     )
 
 
-schema = strawberry.Schema(query=Query)
+schema = strawberry.Schema(query=Query, subscription=Subscription)
 
 
 @asynccontextmanager
@@ -63,7 +67,17 @@ async def lifespan(app: FastAPI):
     graphql_app = GraphQLRouter(schema, context_getter=get_context)
     app.include_router(graphql_app, prefix="/graphql")
 
+    # Real-time: consume the fanout exchange and feed GraphQL subscriptions
+    consume_task = asyncio.create_task(consumer.start_consuming())
+
     yield
+
+    consume_task.cancel()
+    try:
+        await consume_task
+    except asyncio.CancelledError:
+        pass
+    await consumer.stop_consuming()
     await engine.dispose()
 
 
