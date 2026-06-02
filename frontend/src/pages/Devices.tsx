@@ -6,9 +6,11 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Input, Label, Select } from '../components/ui/Field'
+import { Input, Label } from '../components/ui/Field'
+import { Loading } from '../components/ui/Loading'
 import { Modal } from '../components/ui/Modal'
 import { PageHeader } from '../components/ui/PageHeader'
+import { SelectMenu } from '../components/ui/SelectMenu'
 import { useAuth } from '../context/AuthContext'
 
 interface Device {
@@ -87,7 +89,14 @@ export default function Devices() {
     setDevices((prev) => prev.filter((d) => d.id !== id))
   }
 
-  if (loading) return <p className="text-sm text-faint">Cargando…</p>
+  if (loading) {
+    return (
+      <div>
+        <PageHeader title="Dispositivos" subtitle="Inventario de sensores IoT registrados" />
+        <Loading />
+      </div>
+    )
+  }
   if (error) return <p className="text-sm text-danger">{error}</p>
 
   return (
@@ -154,9 +163,7 @@ export default function Devices() {
             </div>
             <div>
               <Label>Tipo de dispositivo</Label>
-              <Select value={form.device_type} onChange={(e) => setForm({ ...form, device_type: e.target.value })}>
-                {DEVICE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </Select>
+              <SelectMenu value={form.device_type} onChange={(v) => setForm({ ...form, device_type: v })} options={DEVICE_TYPES} />
             </div>
             <div>
               <Label>Ubicación</Label>

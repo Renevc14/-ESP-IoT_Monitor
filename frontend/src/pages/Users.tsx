@@ -5,9 +5,10 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { EmptyState } from '../components/ui/EmptyState'
-import { Input, Label, Select } from '../components/ui/Field'
+import { Input, Label } from '../components/ui/Field'
 import { Modal } from '../components/ui/Modal'
 import { PageHeader } from '../components/ui/PageHeader'
+import { SelectMenu } from '../components/ui/SelectMenu'
 import { useAuth } from '../context/AuthContext'
 
 interface User {
@@ -91,13 +92,12 @@ export default function Users() {
                     {u.id === user.id ? (
                       <Badge tone={ROLE_TONE[u.role]}>{u.role}</Badge>
                     ) : (
-                      <Select
+                      <SelectMenu
                         value={u.role}
-                        onChange={(e) => updateUser(u.id, { role: e.target.value as User['role'] })}
-                        className="h-8 w-32"
-                      >
-                        {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </Select>
+                        onChange={(v) => updateUser(u.id, { role: v as User['role'] })}
+                        options={ROLES.map((r) => ({ value: r, label: r }))}
+                        className="w-32"
+                      />
                     )}
                   </td>
                   <td className={TD}><Badge tone={u.is_active ? 'success' : 'neutral'}>{u.is_active ? 'activo' : 'inactivo'}</Badge></td>
@@ -135,9 +135,7 @@ export default function Users() {
             </div>
             <div>
               <Label>Rol</Label>
-              <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-              </Select>
+              <SelectMenu value={form.role} onChange={(v) => setForm({ ...form, role: v })} options={ROLES.map((r) => ({ value: r, label: r }))} />
             </div>
             <div className="flex gap-2 justify-end pt-1">
               <Button type="button" variant="ghost" onClick={() => setShowModal(false)}>Cancelar</Button>
