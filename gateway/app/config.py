@@ -12,6 +12,17 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost"
     analytics_service_url: str = "http://analytics:8004"
     alerts_url: str = "http://alerts:8003"
+    ingestion_url: str = "http://ingestion:8001"
+    processing_url: str = "http://processing:8002"
+
+    # Cookies (refresh token) — Secure requires HTTPS, off by default for local
+    cookie_secure: bool = False
+    frontend_url: str = "http://localhost"
+
+    # SMTP (password recovery emails)
+    smtp_host: str = ""
+    smtp_port: int = 1025
+    smtp_from: str = "no-reply@iot.local"
 
     class Config:
         env_file = ".env"
