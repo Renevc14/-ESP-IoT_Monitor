@@ -2,21 +2,22 @@ import { gql } from '@apollo/client/core'
 import { useQuery } from '@apollo/client/react'
 import { Download } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { api } from '../api/client'
+import { SensorChart } from '../components/SensorChart'
+import { buttonClasses } from '../components/ui/Button'
+import { Card, CardHeader } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { Select } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Segmented } from '../components/ui/Segmented'
+import { StatCard } from '../components/ui/StatCard'
 
 const ANALYTICS_URL = import.meta.env.VITE_ANALYTICS_URL ?? 'http://localhost:8004'
 
 const DEVICE_SUMMARY = gql`
   query AnalyticsSummary($deviceId: String!, $hours: Int!) {
     deviceSummary(deviceId: $deviceId, hours: $hours) {
-      sensorType
-      avgValue
-      minValue
-      maxValue
-      p95Value
-      trend
-      readingCount
+      sensorType avgValue minValue maxValue p95Value trend readingCount
     }
   }
 `
@@ -24,10 +25,7 @@ const DEVICE_SUMMARY = gql`
 const BUCKETED = gql`
   query AnalyticsBuckets($deviceId: String!, $sensorType: String!, $hours: Int!, $bucketMinutes: Int!) {
     bucketedReadings(deviceId: $deviceId, sensorType: $sensorType, hours: $hours, bucketMinutes: $bucketMinutes) {
-      bucket
-      avgValue
-      minValue
-      maxValue
+      bucket avgValue minValue maxValue
     }
   }
 `
@@ -39,20 +37,21 @@ function autoBucket(hours: number): number {
   return 60
 }
 
-const SENSORS = ['temperature', 'humidity', 'energy'] as const
+const SENSORS = ['temperature', 'humidity', 'energy']
 const AGGREGATIONS = [
   { key: 'avgValue', label: 'Promedio' },
   { key: 'minValue', label: 'Mínimo' },
   { key: 'maxValue', label: 'Máximo' },
 ] as const
 const PERIODS = [
-  { label: '6 h', hours: 6 },
-  { label: '24 h', hours: 24 },
-  { label: '7 d', hours: 168 },
-  { label: '30 d', hours: 720 },
+  { label: '6h', value: 6 },
+  { label: '24h', value: 24 },
+  { label: '7d', value: 168 },
+  { label: '30d', value: 720 },
 ]
+const SENSOR_COLOR: Record<string, string> = { temperature: '#f97316', humidity: '#38bdf8', energy: '#34d399' }
 
-interface Device { id: string; name: string; is_active: boolean }
+interface Device { id: string; name: string }
 
 export default function Analytics() {
   const [devices, setDevices] = useState<Device[]>([])
@@ -69,10 +68,7 @@ export default function Analytics() {
     }).catch(() => {})
   }, [])
 
-  const { data: sumData } = useQuery(DEVICE_SUMMARY, {
-    variables: { deviceId, hours },
-    skip: !deviceId,
-  })
+  const { data: sumData } = useQuery(DEVICE_SUMMARY, { variables: { deviceId, hours }, skip: !deviceId })
   const { data: bucketData } = useQuery(BUCKETED, {
     variables: { deviceId, sensorType, hours, bucketMinutes: autoBucket(hours) },
     skip: !deviceId,
@@ -91,80 +87,51 @@ export default function Analytics() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <h2 className="text-xl font-semibold text-white">Analytics</h2>
-        <div className="flex items-center gap-2 ml-auto">
-          <a href={exportUrl('csv')} className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg">
-            <Download size={14} /> CSV
-          </a>
-          <a href={exportUrl('json')} className="flex items-center gap-1 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs px-3 py-1.5 rounded-lg">
-            <Download size={14} /> JSON
-          </a>
-        </div>
-      </div>
+      <PageHeader title="Analytics" subtitle="Exploración de métricas y exportación de datos">
+        <a href={exportUrl('csv')} className={buttonClasses('secondary', 'sm')}><Download size={14} /> CSV</a>
+        <a href={exportUrl('json')} className={buttonClasses('secondary', 'sm')}><Download size={14} /> JSON</a>
+      </PageHeader>
 
-      {/* Selectors */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        <select value={deviceId} onChange={(e) => setDeviceId(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white">
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <Select value={deviceId} onChange={(e) => setDeviceId(e.target.value)} className="w-52">
           {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-        <select value={sensorType} onChange={(e) => setSensorType(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white">
+        </Select>
+        <Select value={sensorType} onChange={(e) => setSensorType(e.target.value)} className="w-36">
           {SENSORS.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
-        <select value={agg} onChange={(e) => setAgg(e.target.value as any)}
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white">
+        </Select>
+        <Select value={agg} onChange={(e) => setAgg(e.target.value as any)} className="w-36">
           {AGGREGATIONS.map((a) => <option key={a.key} value={a.key}>{a.label}</option>)}
-        </select>
-        <div className="flex bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-          {PERIODS.map((p) => (
-            <button key={p.hours} onClick={() => setHours(p.hours)}
-              className={`px-3 py-1.5 text-xs transition-colors ${hours === p.hours ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-              {p.label}
-            </button>
-          ))}
+        </Select>
+        <Segmented options={PERIODS} value={hours} onChange={setHours} />
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <StatCard label="Promedio" value={fmt(summary?.avgValue)} />
+        <StatCard label="Mínimo" value={fmt(summary?.minValue)} />
+        <StatCard label="Máximo" value={fmt(summary?.maxValue)} />
+        <StatCard label="Percentil 95" value={fmt(summary?.p95Value)} accent="accent" />
+        <StatCard label="Tendencia" value={fmtSigned(summary?.trend)} accent={(summary?.trend ?? 0) >= 0 ? 'success' : 'danger'} />
+      </div>
+
+      <Card>
+        <CardHeader title="Serie temporal" subtitle={`${sensorType} · ${AGGREGATIONS.find((a) => a.key === agg)?.label} · últimas ${hours}h`} />
+        <div className="px-2 pb-3">
+          {chartData.length === 0 ? (
+            <EmptyState title="Sin datos para el periodo seleccionado" />
+          ) : (
+            <SensorChart data={chartData} color={SENSOR_COLOR[sensorType] ?? '#6366f1'} height={300} />
+          )}
         </div>
-      </div>
-
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <Stat label="Promedio" value={summary?.avgValue} />
-        <Stat label="Mínimo" value={summary?.minValue} />
-        <Stat label="Máximo" value={summary?.maxValue} />
-        <Stat label="P95" value={summary?.p95Value} />
-        <Stat label="Tendencia" value={summary?.trend} signed />
-      </div>
-
-      {/* Chart */}
-      <div className="bg-slate-800 rounded-xl p-4">
-        {chartData.length === 0 ? (
-          <div className="h-64 flex items-center justify-center text-slate-500 text-sm">Sin datos para el periodo seleccionado</div>
-        ) : (
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-              <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} width={48} />
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-              <Line type="monotone" dataKey="value" stroke="#38bdf8" dot={false} strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        )}
-      </div>
+      </Card>
     </div>
   )
 }
 
-function Stat({ label, value, signed }: { label: string; value?: number; signed?: boolean }) {
-  const v = value != null ? Number(value) : null
-  const color = signed && v != null ? (v >= 0 ? 'text-green-400' : 'text-red-400') : 'text-slate-100'
-  return (
-    <div className="bg-slate-800 rounded-xl p-4">
-      <p className="text-xs text-slate-400 mb-1">{label}</p>
-      <p className={`text-2xl font-semibold ${color}`}>
-        {v != null ? `${signed && v >= 0 ? '+' : ''}${v.toFixed(2)}` : '—'}
-      </p>
-    </div>
-  )
+function fmt(v?: number) {
+  return v != null ? Number(v).toFixed(2) : '—'
+}
+function fmtSigned(v?: number) {
+  if (v == null) return '—'
+  const n = Number(v)
+  return `${n >= 0 ? '+' : ''}${n.toFixed(2)}`
 }

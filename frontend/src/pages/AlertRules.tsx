@@ -1,6 +1,14 @@
+import { Plus, SlidersHorizontal } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { Input, Label, Select } from '../components/ui/Field'
+import { Modal } from '../components/ui/Modal'
+import { PageHeader } from '../components/ui/PageHeader'
 import { useAuth } from '../context/AuthContext'
 
 interface Device { id: string; name: string }
@@ -18,39 +26,17 @@ interface AlertRule {
 
 const SENSOR_TYPES = ['temperature', 'humidity', 'energy']
 const OPERATORS = [
-  { value: 'gt', label: '> (greater than)' },
-  { value: 'lt', label: '< (less than)' },
-  { value: 'gte', label: '>= (greater or equal)' },
-  { value: 'lte', label: '<= (less or equal)' },
+  { value: 'gt', label: '> (mayor que)' },
+  { value: 'lt', label: '< (menor que)' },
+  { value: 'gte', label: '>= (mayor o igual)' },
+  { value: 'lte', label: '<= (menor o igual)' },
 ]
 const SEVERITIES = ['warning', 'critical']
-
 const OPERATOR_LABELS: Record<string, string> = { gt: '>', lt: '<', gte: '>=', lte: '<=' }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-xl p-6 w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-white font-semibold text-base">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">×</button>
-        </div>
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-4">
-      <label className="block text-xs text-slate-400 mb-1">{label}</label>
-      {children}
-    </div>
-  )
-}
-
-const inputCls = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500'
+const TH = 'text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-faint'
+const TD = 'px-4 py-3'
+const ROW = 'border-t border-line/60 hover:bg-surface-2/40 transition-colors'
 
 export default function AlertRules() {
   const { user } = useAuth()
@@ -105,7 +91,7 @@ export default function AlertRules() {
       setLoading(true)
       await loadData()
     } catch (err: any) {
-      setFormError(err.response?.data?.detail ?? 'Failed to create rule')
+      setFormError(err.response?.data?.detail ?? 'No se pudo crear la regla')
     } finally {
       setCreating(false)
     }
@@ -117,187 +103,108 @@ export default function AlertRules() {
   }
 
   async function deleteRule(id: string) {
-    if (!confirm('Delete this alert rule?')) return
+    if (!confirm('¿Eliminar esta regla de alerta?')) return
     await api.delete(`/alert-rules/${id}`)
     setRules((prev) => prev.filter((r) => r.id !== id))
   }
 
-  if (loading) return <p className="text-slate-400 text-sm">Loading…</p>
+  if (loading) return <p className="text-sm text-faint">Cargando…</p>
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-semibold text-white">Alert Rules</h2>
-        {isAdmin && (
-          <button
-            onClick={() => { setForm({ ...form, device_id: filterDeviceId || (devices[0]?.id ?? '') }); setShowCreate(true) }}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-          >
-            + Add Rule
-          </button>
-        )}
-      </div>
-
-      {/* Filter by device */}
-      <div className="mb-4 flex items-center gap-3">
-        <label className="text-slate-400 text-sm">Filter by device:</label>
-        <select
-          className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
+      <PageHeader title="Reglas de alerta" subtitle="Umbrales por dispositivo y tipo de sensor">
+        <Select
           value={filterDeviceId}
-          onChange={(e) => {
-            if (e.target.value) setSearchParams({ device_id: e.target.value })
-            else setSearchParams({})
-          }}
+          onChange={(e) => (e.target.value ? setSearchParams({ device_id: e.target.value }) : setSearchParams({}))}
+          className="w-48"
         >
-          <option value="">All devices</option>
-          {devices.map((d) => (
-            <option key={d.id} value={d.id}>{d.name}</option>
-          ))}
-        </select>
-        {filterDeviceId && (
-          <button
-            onClick={() => setSearchParams({})}
-            className="text-xs text-slate-400 hover:text-white underline underline-offset-2"
-          >
-            Clear filter
-          </button>
+          <option value="">Todos los dispositivos</option>
+          {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </Select>
+        {isAdmin && (
+          <Button size="sm" onClick={() => { setForm({ ...form, device_id: filterDeviceId || (devices[0]?.id ?? '') }); setShowCreate(true) }}>
+            <Plus size={15} /> Nueva regla
+          </Button>
         )}
-      </div>
+      </PageHeader>
 
-      <div className="bg-slate-800 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Device</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Sensor</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Condition</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Severity</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Active</th>
-              {isAdmin && <th className="px-4 py-3" />}
-            </tr>
-          </thead>
-          <tbody>
-            {rules.map((r) => (
-              <tr key={r.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                <td className="px-4 py-3 text-white font-medium">{deviceName(r.device_id)}</td>
-                <td className="px-4 py-3 text-slate-300">
-                  <span className="bg-slate-700 px-2 py-0.5 rounded text-xs">{r.sensor_type}</span>
-                </td>
-                <td className="px-4 py-3 text-slate-100 font-mono text-xs">
-                  {OPERATOR_LABELS[r.operator]} {r.threshold}
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${r.severity === 'critical' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'}`}>
-                    {r.severity}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${r.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-600 text-slate-400'}`}>
-                    {r.is_active ? 'yes' : 'no'}
-                  </span>
-                </td>
-                {isAdmin && (
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={() => toggleRule(r)}
-                        className={`text-xs px-2 py-1 rounded transition-colors ${r.is_active ? 'bg-yellow-600/30 hover:bg-yellow-600/50 text-yellow-400' : 'bg-green-600/30 hover:bg-green-600/50 text-green-400'}`}
-                      >
-                        {r.is_active ? 'Disable' : 'Enable'}
-                      </button>
-                      <button
-                        onClick={() => deleteRule(r.id)}
-                        className="text-xs bg-red-600/20 hover:bg-red-600/40 text-red-400 px-2 py-1 rounded transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                )}
+      {rules.length === 0 ? (
+        <EmptyState icon={<SlidersHorizontal size={28} />} title="No hay reglas configuradas" />
+      ) : (
+        <Card className="overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className={TH}>Dispositivo</th>
+                <th className={TH}>Sensor</th>
+                <th className={TH}>Condición</th>
+                <th className={TH}>Severidad</th>
+                <th className={TH}>Activa</th>
+                {isAdmin && <th className={TH} />}
               </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {rules.length === 0 && (
-          <p className="text-center text-slate-400 text-sm py-8">No alert rules configured</p>
-        )}
-      </div>
+            </thead>
+            <tbody>
+              {rules.map((r) => (
+                <tr key={r.id} className={ROW}>
+                  <td className={`${TD} font-medium text-foreground`}>{deviceName(r.device_id)}</td>
+                  <td className={TD}><Badge>{r.sensor_type}</Badge></td>
+                  <td className={`${TD} font-mono text-xs text-foreground tnum`}>{OPERATOR_LABELS[r.operator]} {r.threshold}</td>
+                  <td className={TD}><Badge tone={r.severity === 'critical' ? 'danger' : 'warning'}>{r.severity}</Badge></td>
+                  <td className={TD}><Badge tone={r.is_active ? 'success' : 'neutral'}>{r.is_active ? 'sí' : 'no'}</Badge></td>
+                  {isAdmin && (
+                    <td className={TD}>
+                      <div className="flex items-center gap-2 justify-end">
+                        <Button variant="secondary" size="sm" onClick={() => toggleRule(r)}>{r.is_active ? 'Desactivar' : 'Activar'}</Button>
+                        <Button variant="danger" size="sm" onClick={() => deleteRule(r.id)}>Eliminar</Button>
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       {showCreate && (
-        <Modal title="Add Alert Rule" onClose={() => { setShowCreate(false); setFormError('') }}>
-          <form onSubmit={handleCreate}>
-            <Field label="Device *">
-              <select
-                className={inputCls}
-                value={form.device_id}
-                onChange={(e) => setForm({ ...form, device_id: e.target.value })}
-                required
-              >
-                {devices.map((d) => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Sensor Type *">
-              <select
-                className={inputCls}
-                value={form.sensor_type}
-                onChange={(e) => setForm({ ...form, sensor_type: e.target.value })}
-              >
-                {SENSOR_TYPES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Operator *">
-              <select
-                className={inputCls}
-                value={form.operator}
-                onChange={(e) => setForm({ ...form, operator: e.target.value })}
-              >
-                {OPERATORS.map((o) => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Threshold *">
-              <input
-                type="number"
-                step="0.1"
-                className={inputCls}
-                value={form.threshold}
-                onChange={(e) => setForm({ ...form, threshold: e.target.value })}
-                required
-              />
-            </Field>
-            <Field label="Severity *">
-              <select
-                className={inputCls}
-                value={form.severity}
-                onChange={(e) => setForm({ ...form, severity: e.target.value })}
-              >
-                {SEVERITIES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </Field>
-            {formError && <p className="text-red-400 text-xs mb-3">{formError}</p>}
-            <div className="flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => { setShowCreate(false); setFormError('') }}
-                className="text-sm text-slate-400 hover:text-white px-4 py-2 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={creating}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
-              >
-                {creating ? 'Creating…' : 'Create Rule'}
-              </button>
+        <Modal title="Nueva regla de alerta" onClose={() => { setShowCreate(false); setFormError('') }}>
+          <form onSubmit={handleCreate} className="space-y-4">
+            <div>
+              <Label>Dispositivo</Label>
+              <Select value={form.device_id} onChange={(e) => setForm({ ...form, device_id: e.target.value })} required>
+                {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Sensor</Label>
+                <Select value={form.sensor_type} onChange={(e) => setForm({ ...form, sensor_type: e.target.value })}>
+                  {SENSOR_TYPES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </div>
+              <div>
+                <Label>Severidad</Label>
+                <Select value={form.severity} onChange={(e) => setForm({ ...form, severity: e.target.value })}>
+                  {SEVERITIES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Operador</Label>
+                <Select value={form.operator} onChange={(e) => setForm({ ...form, operator: e.target.value })}>
+                  {OPERATORS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </Select>
+              </div>
+              <div>
+                <Label>Umbral</Label>
+                <Input type="number" step="0.1" value={form.threshold} onChange={(e) => setForm({ ...form, threshold: e.target.value })} required />
+              </div>
+            </div>
+            {formError && <p className="text-sm text-danger">{formError}</p>}
+            <div className="flex gap-2 justify-end pt-1">
+              <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); setFormError('') }}>Cancelar</Button>
+              <Button type="submit" disabled={creating}>{creating ? 'Creando…' : 'Crear regla'}</Button>
             </div>
           </form>
         </Modal>

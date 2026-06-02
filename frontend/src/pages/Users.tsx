@@ -1,5 +1,13 @@
+import { Plus, Users as UsersIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { Input, Label, Select } from '../components/ui/Field'
+import { Modal } from '../components/ui/Modal'
+import { PageHeader } from '../components/ui/PageHeader'
 import { useAuth } from '../context/AuthContext'
 
 interface User {
@@ -12,6 +20,11 @@ interface User {
 }
 
 const ROLES = ['admin', 'operator', 'viewer'] as const
+const ROLE_TONE: Record<User['role'], 'accent' | 'info' | 'neutral'> = { admin: 'accent', operator: 'info', viewer: 'neutral' }
+
+const TH = 'text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-faint'
+const TD = 'px-4 py-3'
+const ROW = 'border-t border-line/60 hover:bg-surface-2/40 transition-colors'
 
 export default function Users() {
   const { user } = useAuth()
@@ -46,105 +59,92 @@ export default function Users() {
   }
 
   if (user?.role !== 'admin') {
-    return <p className="text-slate-400 text-sm">Acceso restringido a administradores.</p>
+    return <EmptyState icon={<UsersIcon size={28} />} title="Acceso restringido a administradores" />
   }
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-5">
-        <h2 className="text-xl font-semibold text-white">Usuarios</h2>
-        <button
-          onClick={() => setShowModal(true)}
-          className="ml-auto bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-1.5 rounded-lg transition-colors"
-        >
-          Nuevo usuario
-        </button>
-      </div>
+      <PageHeader title="Usuarios" subtitle="Gestión de cuentas y roles (RBAC)">
+        <Button size="sm" onClick={() => setShowModal(true)}><Plus size={15} /> Nuevo usuario</Button>
+      </PageHeader>
 
-      <div className="bg-slate-800 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-700">
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Email</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Nombre</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Rol</th>
-              <th className="text-left px-4 py-3 text-slate-400 font-medium">Estado</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                <td className="px-4 py-3 text-white">{u.email}</td>
-                <td className="px-4 py-3 text-slate-300">{u.full_name ?? '—'}</td>
-                <td className="px-4 py-3">
-                  <select
-                    value={u.role}
-                    disabled={u.id === user.id}
-                    onChange={(e) => updateUser(u.id, { role: e.target.value as User['role'] })}
-                    className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white disabled:opacity-50"
-                  >
-                    {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </td>
-                <td className="px-4 py-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-600/40 text-slate-400'}`}>
-                    {u.is_active ? 'activo' : 'inactivo'}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {u.id !== user.id && (
-                    <button
-                      onClick={() => updateUser(u.id, { is_active: !u.is_active })}
-                      className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded transition-colors"
-                    >
-                      {u.is_active ? 'Desactivar' : 'Activar'}
-                    </button>
-                  )}
-                </td>
+      {users.length === 0 ? (
+        <EmptyState icon={<UsersIcon size={28} />} title="Sin usuarios" />
+      ) : (
+        <Card className="overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                <th className={TH}>Email</th>
+                <th className={TH}>Nombre</th>
+                <th className={TH}>Rol</th>
+                <th className={TH}>Estado</th>
+                <th className={TH} />
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {users.length === 0 && <p className="text-slate-500 text-sm px-4 py-6 text-center">Sin usuarios</p>}
-      </div>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className={ROW}>
+                  <td className={`${TD} font-medium text-foreground`}>{u.email}</td>
+                  <td className={`${TD} text-muted`}>{u.full_name ?? '—'}</td>
+                  <td className={TD}>
+                    {u.id === user.id ? (
+                      <Badge tone={ROLE_TONE[u.role]}>{u.role}</Badge>
+                    ) : (
+                      <Select
+                        value={u.role}
+                        onChange={(e) => updateUser(u.id, { role: e.target.value as User['role'] })}
+                        className="h-8 w-32"
+                      >
+                        {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </Select>
+                    )}
+                  </td>
+                  <td className={TD}><Badge tone={u.is_active ? 'success' : 'neutral'}>{u.is_active ? 'activo' : 'inactivo'}</Badge></td>
+                  <td className={TD}>
+                    <div className="flex justify-end">
+                      {u.id !== user.id && (
+                        <Button variant="secondary" size="sm" onClick={() => updateUser(u.id, { is_active: !u.is_active })}>
+                          {u.is_active ? 'Desactivar' : 'Activar'}
+                        </Button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowModal(false)}>
-          <form
-            onClick={(e) => e.stopPropagation()}
-            onSubmit={createUser}
-            className="bg-slate-800 rounded-xl p-6 w-full max-w-md space-y-4"
-          >
-            <h3 className="text-lg font-semibold text-white">Nuevo usuario</h3>
-            {error && <p className="text-sm text-red-400">{error}</p>}
-            <input
-              type="email" required placeholder="Email"
-              value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
-            />
-            <input
-              type="password" required minLength={8} placeholder="Contraseña (mín. 8)"
-              value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
-            />
-            <input
-              type="text" placeholder="Nombre completo"
-              value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
-            />
-            <select
-              value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white"
-            >
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-            <div className="flex gap-2 justify-end">
-              <button type="button" onClick={() => setShowModal(false)} className="text-sm text-slate-400 px-4 py-2">Cancelar</button>
-              <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg">Crear</button>
+        <Modal title="Nuevo usuario" onClose={() => setShowModal(false)}>
+          <form onSubmit={createUser} className="space-y-4">
+            {error && <p className="text-sm text-danger">{error}</p>}
+            <div>
+              <Label>Email</Label>
+              <Input type="email" required value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="usuario@iot.local" />
+            </div>
+            <div>
+              <Label>Contraseña (mín. 8)</Label>
+              <Input type="password" required minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="••••••••" />
+            </div>
+            <div>
+              <Label>Nombre completo</Label>
+              <Input value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} placeholder="Nombre Apellido" />
+            </div>
+            <div>
+              <Label>Rol</Label>
+              <Select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              </Select>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button type="button" variant="ghost" onClick={() => setShowModal(false)}>Cancelar</Button>
+              <Button type="submit">Crear</Button>
             </div>
           </form>
-        </div>
+        </Modal>
       )}
     </div>
   )
