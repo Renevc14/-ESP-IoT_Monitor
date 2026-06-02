@@ -6,6 +6,7 @@ from redis.asyncio import Redis
 
 from app.config import settings
 from app.middleware.rate_limiter import rate_limit_middleware
+from app.middleware.security_headers import security_headers_middleware
 from app.routers import alert_rules, alerts_proxy, auth, devices, users
 
 
@@ -35,7 +36,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Rate limiting middleware
+# Security headers + rate limiting middleware
+app.middleware("http")(security_headers_middleware)
 app.middleware("http")(rate_limit_middleware)
 
 # Routers
