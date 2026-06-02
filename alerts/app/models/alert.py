@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, func
+from sqlalchemy import ARRAY, Boolean, DateTime, Numeric, String, func
 from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -38,6 +38,7 @@ class AlertRule(Base):
     operator: Mapped[str] = mapped_column(_operator_enum, nullable=False)
     threshold: Mapped[float] = mapped_column(Numeric(10, 4), nullable=False)
     severity: Mapped[str] = mapped_column(_severity_enum, nullable=False)
+    notification_emails: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -53,6 +54,8 @@ class Alert(Base):
     severity: Mapped[str] = mapped_column(_severity_enum, nullable=False)
     status: Mapped[str] = mapped_column(_status_enum, nullable=False, default="active")
     acknowledged_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
