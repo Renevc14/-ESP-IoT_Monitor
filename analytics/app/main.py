@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from strawberry.fastapi import GraphQLRouter
 
 from app.config import settings
+from app.routers.export import router as export_router
 from app.resolvers.queries import (
     resolve_alert_summary,
     resolve_alerts,
@@ -79,6 +80,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(export_router)
 
 
 @app.get("/health", tags=["Health"])
