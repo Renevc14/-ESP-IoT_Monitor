@@ -20,6 +20,8 @@ class DeviceSummaryType:
     avg_value: float
     min_value: float
     max_value: float
+    p95_value: float
+    trend: float  # net change over the window: last reading − first reading
     reading_count: int
     period_start: datetime
     period_end: datetime
