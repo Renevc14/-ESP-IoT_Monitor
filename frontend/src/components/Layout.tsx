@@ -1,6 +1,6 @@
 import { Activity, BarChart3, Bell, Cpu, LayoutDashboard, LogOut, SlidersHorizontal, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { cn } from './ui/cn'
@@ -8,6 +8,7 @@ import { cn } from './ui/cn'
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const [activeAlerts, setActiveAlerts] = useState(0)
 
   useEffect(() => {
@@ -99,7 +100,7 @@ export default function Layout() {
 
       {/* Main content */}
       <main className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-[1400px] px-8 py-7">
+        <div key={location.pathname} className="mx-auto max-w-[1400px] px-8 py-7 animate-fade-up">
           <Outlet />
         </div>
       </main>
