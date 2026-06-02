@@ -1,8 +1,9 @@
 import { gql } from '@apollo/client/core'
 import { useQuery } from '@apollo/client/react'
-import { Activity, AlertTriangle, Bell, Cpu } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Activity, AlertTriangle, Bell, Cpu, Radio } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { onConnectionChange, subscribeReadings } from '../api/realtime'
 import { SensorChart } from '../components/SensorChart'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardHeader } from '../components/ui/Card'
@@ -62,6 +63,9 @@ export default function Dashboard() {
   const [selectedId, setSelectedId] = useState('')
   const [hours, setHours] = useState(24)
   const [activeByDevice, setActiveByDevice] = useState<Record<string, number>>({})
+  const [live, setLive] = useState(false)
+
+  useEffect(() => onConnectionChange(setLive), [])
 
   useEffect(() => {
     api.get('/devices').then((r) => {
@@ -100,6 +104,10 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <PageHeader title="Dashboard" subtitle="Monitoreo en tiempo real de sensores IoT">
+        <span className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2.5 py-1.5 text-xs text-muted">
+          <Radio size={13} className={live ? 'text-success' : 'text-faint'} />
+          {live ? 'En vivo' : 'Sin conexión'}
+        </span>
         <SelectMenu value={selectedId} onChange={setSelectedId} options={devices.map((d) => ({ value: d.id, label: d.name }))} className="w-52" />
         <Segmented options={TIME_OPTIONS} value={hours} onChange={setHours} />
       </PageHeader>
@@ -157,10 +165,29 @@ export default function Dashboard() {
 
 function SensorPanel({ deviceId, sensor, hours, deviceName }: { deviceId: string; sensor: string; hours: number; deviceName: string }) {
   const meta = SENSOR_META[sensor] ?? { color: '#22d3ee', unit: '', label: sensor }
-  const { data, loading } = useQuery(BUCKETED, {
+  const { data, loading, refetch } = useQuery(BUCKETED, {
     variables: { deviceId, sensorType: sensor, hours, bucketMinutes: autoBucket(hours) },
-    pollInterval: 30000,
+    pollInterval: 60000, // respaldo; el tiempo real llega por suscripción WebSocket
   })
+
+  // Real-time: refetch (debounced) cuando llega una lectura nueva por suscripción
+  const refetchRef = useRef(refetch)
+  refetchRef.current = refetch
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => {
+    const unsub = subscribeReadings({ deviceId, sensorType: sensor }, () => {
+      if (timer.current) return
+      timer.current = window.setTimeout(() => {
+        timer.current = undefined
+        refetchRef.current()
+      }, 1500)
+    })
+    return () => {
+      unsub()
+      if (timer.current) window.clearTimeout(timer.current)
+    }
+  }, [deviceId, sensor, hours])
+
   const buckets = (data as any)?.bucketedReadings ?? []
   const series = buckets.map((b: any) => ({ time: fmtTime(b.bucket, hours), value: Number(b.avgValue) }))
   const current: number | null = series.length ? series[series.length - 1].value : null
