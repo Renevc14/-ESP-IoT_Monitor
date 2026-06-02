@@ -32,10 +32,14 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      # check_port_connectivity waits until the AMQP listener actually accepts
+      # client connections (plain "ping" reports healthy too early, causing
+      # consumers to crash on first boot with "Connection refused").
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 10
+      start_period: 20s
     restart: unless-stopped
     networks: [iot_network]
 
