@@ -1,5 +1,13 @@
+import { Bell } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
+import { Badge } from '../components/ui/Badge'
+import { Button } from '../components/ui/Button'
+import { Card } from '../components/ui/Card'
+import { cn } from '../components/ui/cn'
+import { EmptyState } from '../components/ui/EmptyState'
+import { Input } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8003'
 
@@ -14,75 +22,52 @@ interface Alert {
 
 interface Device { id: string; name: string }
 
-function SeverityBadge({ severity }: { severity: string }) {
-  const cls = severity === 'critical' ? 'bg-red-500/20 text-red-400' : 'bg-yellow-500/20 text-yellow-400'
-  return <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{severity}</span>
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const cls =
-    status === 'active'       ? 'bg-red-500/20 text-red-400'    :
-    status === 'acknowledged' ? 'bg-blue-500/20 text-blue-400'  :
-                                'bg-green-500/20 text-green-400'
-  return <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{status}</span>
-}
-
-type StatusFilter   = 'all' | 'active' | 'acknowledged' | 'resolved'
+type StatusFilter = 'all' | 'active' | 'acknowledged' | 'resolved'
 type SeverityFilter = 'all' | 'warning' | 'critical'
 
+const TH = 'text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wider text-faint'
+const TD = 'px-4 py-3'
+const ROW = 'border-t border-line/60 hover:bg-surface-2/40 transition-colors'
+
 export default function Alerts() {
-  const [alerts, setAlerts]     = useState<Alert[]>([])
-  const [devices, setDevices]   = useState<Device[]>([])
+  const [alerts, setAlerts] = useState<Alert[]>([])
+  const [devices, setDevices] = useState<Device[]>([])
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
-  const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all')
   const [fromDate, setFromDate] = useState('')
-  const [toDate,   setToDate]   = useState('')
+  const [toDate, setToDate] = useState('')
   const wsRef = useRef<WebSocket | null>(null)
 
-  // Device lookup map
   const deviceName = (id: string) => devices.find((d) => d.id === id)?.name ?? id.slice(0, 8) + '…'
 
-  // Load devices for name lookup
-  useEffect(() => {
-    api.get('/devices').then((r) => setDevices(r.data)).catch(() => {})
-  }, [])
+  useEffect(() => { api.get('/devices').then((r) => setDevices(r.data)).catch(() => {}) }, [])
+  useEffect(() => { api.get('/alerts').then((r) => setAlerts(r.data)).catch(() => {}) }, [])
 
-  // Fetch existing alerts
-  useEffect(() => {
-    api.get('/alerts').then((r) => setAlerts(r.data)).catch(() => {})
-  }, [])
-
-  // WebSocket live feed
   useEffect(() => {
     const ws = new WebSocket(`${WS_URL}/ws/alerts`)
     wsRef.current = ws
-
-    ws.onopen  = () => setWsStatus('connected')
+    ws.onopen = () => setWsStatus('connected')
     ws.onclose = () => setWsStatus('disconnected')
     ws.onerror = () => setWsStatus('disconnected')
-
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data)
-        // WebSocket payload (evaluator.py) uses different field names than REST — normalize
-        const id              = msg.id              ?? msg.alert_id
+        const id = msg.id ?? msg.alert_id
         const triggered_value = msg.triggered_value ?? msg.value
-        const created_at      = msg.created_at      ?? msg.recorded_at ?? new Date().toISOString()
-        // Discard malformed messages missing required fields
+        const created_at = msg.created_at ?? msg.recorded_at ?? new Date().toISOString()
         if (!id || triggered_value == null || isNaN(Number(triggered_value))) return
         const alert: Alert = {
           id,
-          device_id:  msg.device_id,
+          device_id: msg.device_id,
           triggered_value: Number(triggered_value),
-          severity:   msg.severity,
-          status:     msg.status ?? 'active',
+          severity: msg.severity,
+          status: msg.status ?? 'active',
           created_at,
         }
         setAlerts((prev) => prev.some((a) => a.id === alert.id) ? prev : [alert, ...prev])
       } catch {}
     }
-
     return () => ws.close()
   }, [])
 
@@ -100,11 +85,10 @@ export default function Alerts() {
     } catch {}
   }
 
-  // Client-side filtering (status, severity, date range)
   const fromTs = fromDate ? new Date(fromDate).getTime() : null
-  const toTs   = toDate ? new Date(toDate).getTime() + 86_400_000 : null // inclusive end of day
+  const toTs = toDate ? new Date(toDate).getTime() + 86_400_000 : null
   const visible = alerts.filter((a) => {
-    if (statusFilter   !== 'all' && a.status   !== statusFilter)   return false
+    if (statusFilter !== 'all' && a.status !== statusFilter) return false
     if (severityFilter !== 'all' && a.severity !== severityFilter) return false
     if (a.created_at) {
       const ts = new Date(a.created_at).getTime()
@@ -114,20 +98,18 @@ export default function Alerts() {
     return true
   })
 
-  const activeCount   = alerts.filter((a) => a.status === 'active').length
+  const activeCount = alerts.filter((a) => a.status === 'active').length
   const criticalCount = alerts.filter((a) => a.severity === 'critical' && a.status === 'active').length
+  const wsColor = wsStatus === 'connected' ? 'bg-success' : wsStatus === 'connecting' ? 'bg-warning' : 'bg-danger'
 
-  const wsColor = wsStatus === 'connected' ? 'bg-green-500' : wsStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-
-  function FilterBtn<T extends string>({
-    value, current, onClick, children,
-  }: { value: T; current: T; onClick: (v: T) => void; children: React.ReactNode }) {
+  function FilterBtn<T extends string>({ value, current, onClick, children }: { value: T; current: T; onClick: (v: T) => void; children: React.ReactNode }) {
     return (
       <button
         onClick={() => onClick(value)}
-        className={`px-3 py-1 text-xs rounded-lg transition-colors ${
-          current === value ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-400 hover:text-white'
-        }`}
+        className={cn(
+          'px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
+          current === value ? 'bg-surface-2 text-foreground' : 'text-muted hover:text-foreground',
+        )}
       >
         {children}
       </button>
@@ -136,112 +118,82 @@ export default function Alerts() {
 
   return (
     <div>
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <h2 className="text-xl font-semibold text-white">Alerts</h2>
-
-        {/* Live counts */}
-        {activeCount > 0 && (
-          <div className="flex gap-2">
-            <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">
-              {activeCount} active
-            </span>
-            {criticalCount > 0 && (
-              <span className="text-xs bg-red-600/30 text-red-300 px-2 py-0.5 rounded-full font-medium">
-                {criticalCount} critical
-              </span>
-            )}
-          </div>
-        )}
-
-        {/* WebSocket status */}
-        <div className="flex items-center gap-2 ml-auto">
-          <div className={`w-2 h-2 rounded-full animate-pulse ${wsColor}`} />
-          <span className="text-xs text-slate-400">Live · {wsStatus}</span>
+      <PageHeader title="Alertas" subtitle="Monitor de alertas en tiempo real">
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-1.5">
+          <span className={cn('h-2 w-2 rounded-full animate-pulse', wsColor)} />
+          <span className="text-xs text-muted capitalize">{wsStatus}</span>
         </div>
+      </PageHeader>
+
+      {/* Resumen */}
+      <div className="flex items-center gap-2 mb-4">
+        <Badge tone={activeCount > 0 ? 'danger' : 'neutral'}>{activeCount} activas</Badge>
+        {criticalCount > 0 && <Badge tone="danger">{criticalCount} críticas</Badge>}
       </div>
 
-      {/* ── Filters ── */}
-      <div className="flex flex-wrap gap-4 mb-4">
+      {/* Filtros */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 mb-4">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Status:</span>
-          <div className="flex gap-1">
-            <FilterBtn value="all"          current={statusFilter} onClick={setStatusFilter}>All</FilterBtn>
-            <FilterBtn value="active"       current={statusFilter} onClick={setStatusFilter}>Active</FilterBtn>
-            <FilterBtn value="acknowledged" current={statusFilter} onClick={setStatusFilter}>Acknowledged</FilterBtn>
-            <FilterBtn value="resolved"     current={statusFilter} onClick={setStatusFilter}>Resolved</FilterBtn>
+          <span className="text-xs text-faint">Estado</span>
+          <div className="flex gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+            <FilterBtn value="all" current={statusFilter} onClick={setStatusFilter}>Todas</FilterBtn>
+            <FilterBtn value="active" current={statusFilter} onClick={setStatusFilter}>Activas</FilterBtn>
+            <FilterBtn value="acknowledged" current={statusFilter} onClick={setStatusFilter}>Reconocidas</FilterBtn>
+            <FilterBtn value="resolved" current={statusFilter} onClick={setStatusFilter}>Resueltas</FilterBtn>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Severity:</span>
-          <div className="flex gap-1">
-            <FilterBtn value="all"      current={severityFilter} onClick={setSeverityFilter}>All</FilterBtn>
-            <FilterBtn value="critical" current={severityFilter} onClick={setSeverityFilter}>Critical</FilterBtn>
-            <FilterBtn value="warning"  current={severityFilter} onClick={setSeverityFilter}>Warning</FilterBtn>
+          <span className="text-xs text-faint">Severidad</span>
+          <div className="flex gap-0.5 rounded-lg border border-line bg-surface p-0.5">
+            <FilterBtn value="all" current={severityFilter} onClick={setSeverityFilter}>Todas</FilterBtn>
+            <FilterBtn value="critical" current={severityFilter} onClick={setSeverityFilter}>Críticas</FilterBtn>
+            <FilterBtn value="warning" current={severityFilter} onClick={setSeverityFilter}>Advertencia</FilterBtn>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Desde:</span>
-          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
-          <span className="text-xs text-slate-400">Hasta:</span>
-          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+          <span className="text-xs text-faint">Desde</span>
+          <Input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} className="h-8 w-auto" />
+          <span className="text-xs text-faint">Hasta</span>
+          <Input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} className="h-8 w-auto" />
           {(fromDate || toDate) && (
-            <button onClick={() => { setFromDate(''); setToDate('') }}
-              className="text-xs text-slate-400 hover:text-white">limpiar</button>
+            <button onClick={() => { setFromDate(''); setToDate('') }} className="text-xs text-faint hover:text-foreground">limpiar</button>
           )}
         </div>
       </div>
 
-      {/* ── Table ── */}
       {visible.length === 0 ? (
-        <div className="bg-slate-800 rounded-xl p-8 text-center text-slate-400 text-sm">
-          {alerts.length === 0 ? 'No alerts yet' : 'No alerts match the selected filters'}
-        </div>
+        <EmptyState icon={<Bell size={28} />} title={alerts.length === 0 ? 'No hay alertas todavía' : 'Ninguna alerta coincide con los filtros'} />
       ) : (
-        <div className="bg-slate-800 rounded-xl overflow-hidden">
+        <Card className="overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700">
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Device</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Value</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Severity</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Status</th>
-                <th className="text-left px-4 py-3 text-slate-400 font-medium">Time</th>
-                <th className="px-4 py-3" />
+              <tr>
+                <th className={TH}>Dispositivo</th>
+                <th className={TH}>Valor</th>
+                <th className={TH}>Severidad</th>
+                <th className={TH}>Estado</th>
+                <th className={TH}>Hora</th>
+                <th className={TH} />
               </tr>
             </thead>
             <tbody>
               {visible.map((a) => (
-                <tr key={a.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                  <td className="px-4 py-3 text-white font-medium">{deviceName(a.device_id)}</td>
-                  <td className="px-4 py-3 text-white">
-                    {a.triggered_value != null && !isNaN(Number(a.triggered_value))
-                      ? Number(a.triggered_value).toFixed(2)
-                      : '—'}
+                <tr key={a.id} className={ROW}>
+                  <td className={`${TD} font-medium text-foreground`}>{deviceName(a.device_id)}</td>
+                  <td className={`${TD} tnum text-foreground`}>
+                    {a.triggered_value != null && !isNaN(Number(a.triggered_value)) ? Number(a.triggered_value).toFixed(2) : '—'}
                   </td>
-                  <td className="px-4 py-3"><SeverityBadge severity={a.severity} /></td>
-                  <td className="px-4 py-3"><StatusBadge status={a.status} /></td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">
-                    {a.created_at ? new Date(a.created_at).toLocaleString() : '—'}
+                  <td className={TD}><Badge tone={a.severity === 'critical' ? 'danger' : 'warning'}>{a.severity}</Badge></td>
+                  <td className={TD}>
+                    <Badge tone={a.status === 'active' ? 'danger' : a.status === 'acknowledged' ? 'info' : 'success'}>{a.status}</Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      {a.status === 'active' && (
-                        <button
-                          onClick={() => acknowledge(a.id)}
-                          className="text-xs bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 px-2 py-1 rounded transition-colors"
-                        >
-                          Acknowledge
-                        </button>
-                      )}
+                  <td className={`${TD} text-faint text-xs tnum`}>{a.created_at ? new Date(a.created_at).toLocaleString() : '—'}</td>
+                  <td className={TD}>
+                    <div className="flex gap-2 justify-end">
+                      {a.status === 'active' && <Button variant="secondary" size="sm" onClick={() => acknowledge(a.id)}>Reconocer</Button>}
                       {a.status !== 'resolved' && (
-                        <button
-                          onClick={() => resolve(a.id)}
-                          className="text-xs bg-green-600/30 hover:bg-green-600/50 text-green-400 px-2 py-1 rounded transition-colors"
-                        >
-                          Resolve
+                        <button onClick={() => resolve(a.id)} className="text-xs font-medium text-success hover:underline underline-offset-2 px-1">
+                          Resolver
                         </button>
                       )}
                     </div>
@@ -250,10 +202,8 @@ export default function Alerts() {
               ))}
             </tbody>
           </table>
-          <p className="text-xs text-slate-500 px-4 py-2">
-            Showing {visible.length} of {alerts.length} alerts
-          </p>
-        </div>
+          <p className="text-xs text-faint px-4 py-2.5 border-t border-line/60">Mostrando {visible.length} de {alerts.length} alertas</p>
+        </Card>
       )}
     </div>
   )

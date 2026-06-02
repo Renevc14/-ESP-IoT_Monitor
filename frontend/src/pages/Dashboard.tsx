@@ -1,18 +1,15 @@
 import { gql } from '@apollo/client/core'
 import { useQuery } from '@apollo/client/react'
+import { Activity, Bell, Clock, Cpu } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
 import { api } from '../api/client'
-
-// ── GraphQL queries ────────────────────────────────────────────────────────────
+import { SensorChart } from '../components/SensorChart'
+import { Card, CardHeader } from '../components/ui/Card'
+import { EmptyState } from '../components/ui/EmptyState'
+import { Select } from '../components/ui/Field'
+import { PageHeader } from '../components/ui/PageHeader'
+import { Segmented } from '../components/ui/Segmented'
+import { StatCard } from '../components/ui/StatCard'
 
 const DEVICE_SUMMARY = gql`
   query DeviceSummary($deviceId: String!, $hours: Int!) {
@@ -38,22 +35,16 @@ const BUCKETED_READINGS = gql`
     bucketedReadings(deviceId: $deviceId, sensorType: $sensorType, hours: $hours, bucketMinutes: $bucketMinutes) {
       bucket
       avgValue
-      minValue
-      maxValue
-      readingCount
     }
   }
 `
 
-// Auto-select bucket size to keep ~50-80 points on the chart regardless of window
 function autoBucket(hours: number): number {
-  if (hours <= 1)  return 1
-  if (hours <= 6)  return 5
+  if (hours <= 1) return 1
+  if (hours <= 6) return 5
   if (hours <= 24) return 30
   return 60
 }
-
-// ── Types & constants ──────────────────────────────────────────────────────────
 
 interface Device {
   id: string
@@ -63,77 +54,18 @@ interface Device {
 }
 
 const SENSOR_META: Record<string, { color: string; unit: string; label: string }> = {
-  temperature: { color: '#f97316', unit: '°C', label: 'Temperature' },
-  humidity:    { color: '#38bdf8', unit: '%',  label: 'Humidity'    },
-  energy:      { color: '#4ade80', unit: ' kW', label: 'Power'     },
+  temperature: { color: '#f97316', unit: '°C', label: 'Temperatura' },
+  humidity:    { color: '#38bdf8', unit: '%',  label: 'Humedad' },
+  energy:      { color: '#34d399', unit: ' kW', label: 'Energía' },
 }
 
 const TIME_OPTIONS = [
-  { label: '1 h',  hours: 1   },
-  { label: '6 h',  hours: 6   },
-  { label: '24 h', hours: 24  },
-  { label: '7 d',  hours: 168 },
-  { label: '30 d', hours: 720 },
+  { label: '1h',  value: 1   },
+  { label: '6h',  value: 6   },
+  { label: '24h', value: 24  },
+  { label: '7d',  value: 168 },
+  { label: '30d', value: 720 },
 ]
-
-// ── Sub-components ─────────────────────────────────────────────────────────────
-
-function KpiCard({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div className="bg-slate-800 rounded-xl p-4">
-      <p className="text-xs text-slate-400 mb-1">{label}</p>
-      <p className={`text-2xl font-semibold ${color}`}>{value}</p>
-    </div>
-  )
-}
-
-function ReadingsChart({ deviceId, sensorType, color, unit, hours }: { deviceId: string; sensorType: string; color: string; unit: string; hours: number }) {
-  const bucketMinutes = autoBucket(hours)
-  const { data, loading } = useQuery(BUCKETED_READINGS, {
-    variables: { deviceId, sensorType, hours, bucketMinutes },
-    pollInterval: 30000,
-  })
-
-  const fmtTime = (iso: string) => {
-    const d = new Date(iso)
-    if (hours <= 6)  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    if (hours <= 24) return d.toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })
-    return d.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
-  }
-
-  const chartData = ((data as any)?.bucketedReadings ?? []).map((r: any) => ({
-    time: fmtTime(r.bucket),
-    value: Number(r.avgValue),
-    min: Number(r.minValue),
-    max: Number(r.maxValue),
-  }))
-
-  if (loading && chartData.length === 0) {
-    return <div className="h-44 flex items-center justify-center text-slate-500 text-sm">Loading…</div>
-  }
-  if (!loading && chartData.length === 0) {
-    return <div className="h-44 flex items-center justify-center text-slate-500 text-sm">No readings yet</div>
-  }
-
-  return (
-    <ResponsiveContainer width="100%" height={180}>
-      <LineChart data={chartData}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-        <XAxis dataKey="time" tick={{ fontSize: 10, fill: '#94a3b8' }} />
-        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} unit={unit} width={48} />
-        <Tooltip
-          contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }}
-          labelStyle={{ color: '#94a3b8' }}
-          itemStyle={{ color }}
-          formatter={(v: any) => [`${Number(v).toFixed(2)}${unit}`, 'avg']}
-        />
-        <Line type="monotone" dataKey="value" stroke={color} dot={false} strokeWidth={2} />
-      </LineChart>
-    </ResponsiveContainer>
-  )
-}
-
-// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function Dashboard() {
   const [devices, setDevices] = useState<Device[]>([])
@@ -157,10 +89,8 @@ export default function Dashboard() {
 
   const summaries: any[] = (summaryData as any)?.deviceSummary ?? []
   const activeSensors = summaries.map((s) => s.sensorType)
-
   const selectedDevice = devices.find((d) => d.id === selectedId)
 
-  // KPIs
   const activeAlerts = (alertData as any)?.alertSummary?.active ?? 0
   const totalReadings = summaries.reduce((acc, s) => acc + s.readingCount, 0)
   const lastReadingAt = summaries.reduce<string | null>((latest, s) => {
@@ -168,86 +98,86 @@ export default function Dashboard() {
     return !latest || new Date(s.periodEnd) > new Date(latest) ? s.periodEnd : latest
   }, null)
   const lastReadingLabel = lastReadingAt
-    ? new Date(lastReadingAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    ? new Date(lastReadingAt).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })
     : '—'
 
   return (
     <div>
-      {/* ── Header + filters ── */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <h2 className="text-xl font-semibold text-white">Dashboard</h2>
+      <PageHeader title="Dashboard" subtitle="Monitoreo en tiempo real de sensores IoT">
+        <Select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="w-52">
+          {devices.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </Select>
+        <Segmented options={TIME_OPTIONS} value={hours} onChange={setHours} />
+      </PageHeader>
 
-        <div className="flex items-center gap-2 ml-auto">
-          {/* Device selector */}
-          <select
-            className="bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500"
-            value={selectedId}
-            onChange={(e) => setSelectedId(e.target.value)}
-          >
-            {devices.map((d) => (
-              <option key={d.id} value={d.id}>{d.name}</option>
-            ))}
-          </select>
-
-          {/* Time window */}
-          <div className="flex bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
-            {TIME_OPTIONS.map((opt) => (
-              <button
-                key={opt.hours}
-                onClick={() => setHours(opt.hours)}
-                className={`px-3 py-1.5 text-xs transition-colors ${
-                  hours === opt.hours
-                    ? 'bg-blue-600 text-white'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <StatCard label="Dispositivos activos" value={devices.length} icon={<Cpu size={16} />} accent="accent" />
+        <StatCard label="Alertas activas" value={activeAlerts} icon={<Bell size={16} />} accent={activeAlerts > 0 ? 'danger' : 'success'} />
+        <StatCard label="Última lectura" value={<span className="text-lg">{lastReadingLabel}</span>} icon={<Clock size={16} />} />
+        <StatCard label={`Lecturas · ${hours}h`} value={totalReadings || '—'} icon={<Activity size={16} />} hint={selectedDevice?.name} />
       </div>
 
-      {/* ── KPI cards ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <KpiCard label="Dispositivos activos" value={String(devices.length)} color="text-blue-400" />
-        <KpiCard label="Alertas activas" value={String(activeAlerts)} color={activeAlerts > 0 ? 'text-red-400' : 'text-green-400'} />
-        <KpiCard label="Última lectura" value={lastReadingLabel} color="text-slate-100" />
-        <KpiCard label={`Lecturas (${hours}h)`} value={totalReadings ? String(totalReadings) : '—'} color="text-slate-100" />
-      </div>
-
-      {/* ── Charts ── */}
+      {/* Charts */}
       {!selectedId ? (
-        <p className="text-slate-400 text-sm">No devices available</p>
+        <EmptyState title="No hay dispositivos disponibles" />
       ) : activeSensors.length === 0 ? (
-        <div className="bg-slate-800 rounded-xl p-8 text-center text-slate-400 text-sm">
-          No readings for <span className="text-white">{selectedDevice?.name}</span> in the last {hours}h
-        </div>
+        <EmptyState
+          icon={<Activity size={28} />}
+          title={`Sin lecturas para ${selectedDevice?.name ?? 'el dispositivo'} en las últimas ${hours}h`}
+          hint="Inicia el simulador para generar datos"
+        />
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
           {activeSensors.map((sensor) => {
             const meta = SENSOR_META[sensor] ?? { color: '#a78bfa', unit: '', label: sensor }
             return (
-              <div key={`${selectedId}-${sensor}-${hours}`} className="bg-slate-800 rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-sm font-medium text-white">{selectedDevice?.name}</p>
-                    <p className="text-xs text-slate-400">{meta.label}</p>
-                  </div>
-                  <span className="text-xs text-slate-500">last {hours}h · auto-refresh 10s</span>
-                </div>
-                <ReadingsChart
-                  deviceId={selectedId}
-                  sensorType={sensor}
-                  color={meta.color}
-                  unit={meta.unit}
-                  hours={hours}
+              <Card key={`${selectedId}-${sensor}-${hours}`}>
+                <CardHeader
+                  title={
+                    <span className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full" style={{ background: meta.color }} />
+                      {meta.label}
+                    </span>
+                  }
+                  subtitle={`${selectedDevice?.name} · últimas ${hours}h`}
+                  action={<span className="text-[11px] text-faint">auto-refresh 30s</span>}
                 />
-              </div>
+                <div className="px-2 pb-3">
+                  <LiveChart deviceId={selectedId} sensor={sensor} hours={hours} color={meta.color} unit={meta.unit} />
+                </div>
+              </Card>
             )
           })}
         </div>
       )}
     </div>
   )
+}
+
+function LiveChart({ deviceId, sensor, hours, color, unit }: { deviceId: string; sensor: string; hours: number; color: string; unit: string }) {
+  const { data, loading } = useQuery(BUCKETED_READINGS, {
+    variables: { deviceId, sensorType: sensor, hours, bucketMinutes: autoBucket(hours) },
+    pollInterval: 30000,
+  })
+
+  const fmt = (iso: string) => {
+    const d = new Date(iso)
+    if (hours <= 6) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    if (hours <= 24) return d.toLocaleString([], { hour: '2-digit', minute: '2-digit' })
+    return d.toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit' })
+  }
+
+  const chartData = ((data as any)?.bucketedReadings ?? []).map((r: any) => ({
+    time: fmt(r.bucket),
+    value: Number(r.avgValue),
+  }))
+
+  if (loading && chartData.length === 0) {
+    return <div className="h-[200px] flex items-center justify-center text-sm text-faint">Cargando…</div>
+  }
+  if (chartData.length === 0) {
+    return <div className="h-[200px] flex items-center justify-center text-sm text-faint">Sin lecturas</div>
+  }
+  return <SensorChart data={chartData} color={color} unit={unit} />
 }

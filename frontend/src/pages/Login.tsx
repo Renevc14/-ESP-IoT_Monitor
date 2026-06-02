@@ -1,5 +1,8 @@
+import { Activity } from 'lucide-react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
+import { Input, Label } from '../components/ui/Field'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -18,54 +21,69 @@ export default function Login() {
       await login(email, password)
       navigate('/')
     } catch {
-      setError('Invalid credentials')
+      setError('Credenciales inválidas')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
-      <div className="w-full max-w-sm bg-slate-800 rounded-2xl shadow-xl p-8">
-        <h1 className="text-2xl font-semibold text-white mb-1">IoT Monitor</h1>
-        <p className="text-slate-400 text-sm mb-6">Sign in to your account</p>
+    <div className="relative min-h-screen flex items-center justify-center bg-background px-4 overflow-hidden">
+      {/* glow de acento */}
+      <div
+        className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 h-[420px] w-[620px] rounded-full opacity-25 blur-[120px]"
+        style={{ background: 'radial-gradient(closest-side, #6366f1, transparent)' }}
+      />
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">Email</label>
-            <input
-              type="text"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="admin@iot.local"
-              required
-            />
+      <div className="relative w-full max-w-sm">
+        <div className="flex flex-col items-center mb-7">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent mb-3 ring-1 ring-accent/20">
+            <Activity size={22} />
           </div>
-          <div>
-            <label className="block text-sm text-slate-300 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-slate-700 text-white rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+          <h1 className="text-lg font-semibold text-foreground">IoT Monitor</h1>
+          <p className="text-sm text-muted mt-1">Inicia sesión para continuar</p>
+        </div>
 
-          {error && (
-            <p className="text-red-400 text-sm">{error}</p>
-          )}
+        <div className="rounded-2xl border border-line bg-surface p-7 shadow-2xl shadow-black/40">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@iot.local"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div>
+              <Label>Contraseña</Label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                required
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-lg py-2 text-sm font-medium transition-colors"
-          >
-            {loading ? 'Signing in…' : 'Sign in'}
-          </button>
-        </form>
+            {error && (
+              <div className="rounded-lg border border-danger/25 bg-danger/10 px-3 py-2 text-sm text-danger">
+                {error}
+              </div>
+            )}
+
+            <Button type="submit" disabled={loading} className="w-full">
+              {loading ? 'Ingresando…' : 'Ingresar'}
+            </Button>
+          </form>
+        </div>
+
+        <p className="mt-5 text-center text-xs text-faint">
+          Demo: <span className="text-muted">admin@iot.local</span> · <span className="text-muted">Admin1234!</span>
+        </p>
       </div>
     </div>
   )
