@@ -87,6 +87,13 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
       ANALYTICS_SERVICE_URL: http://analytics:8004
       ALERTS_URL: http://alerts:8003
+      INGESTION_URL: http://ingestion:8001
+      PROCESSING_URL: http://processing:8002
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@iot.local}
     depends_on:
       postgres-timescale:
         condition: service_healthy

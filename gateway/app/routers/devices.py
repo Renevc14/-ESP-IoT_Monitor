@@ -1,3 +1,4 @@
+import secrets
 import uuid
 
 import bcrypt
@@ -9,7 +10,7 @@ from app.db.database import get_db
 from app.dependencies import require_admin, require_operator
 from app.models.device import Device
 from app.models.user import User
-from app.schemas.device import DeviceCreate, DeviceResponse, DeviceUpdate
+from app.schemas.device import DeviceCreate, DeviceCreatedResponse, DeviceResponse, DeviceUpdate
 from app.services.audit_service import client_ip, log_event
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
@@ -36,14 +37,16 @@ async def get_device(
     return device
 
 
-@router.post("", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=DeviceCreatedResponse, status_code=status.HTTP_201_CREATED)
 async def create_device(
     body: DeviceCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
     actor: User = Depends(require_admin),
 ):
-    token_hash = bcrypt.hashpw(body.auth_token.encode(), bcrypt.gensalt(rounds=12)).decode()
+    # Token autogenerado si no se provee; se devuelve en claro una sola vez
+    raw_token = body.auth_token or secrets.token_urlsafe(24)
+    token_hash = bcrypt.hashpw(raw_token.encode(), bcrypt.gensalt(rounds=12)).decode()
     device = Device(
         name=body.name,
         device_type=body.device_type,
@@ -58,9 +61,12 @@ async def create_device(
         user_id=actor.id,
         resource=f"device:{device.id}",
         ip=client_ip(request),
-        details={"name": device.name, "device_type": device.device_type.value},
+        details={"name": device.name, "device_type": str(device.device_type)},
     )
-    return device
+    return DeviceCreatedResponse(
+        **DeviceResponse.model_validate(device).model_dump(),
+        auth_token=raw_token,
+    )
 
 
 @router.patch("/{device_id}", response_model=DeviceResponse)
