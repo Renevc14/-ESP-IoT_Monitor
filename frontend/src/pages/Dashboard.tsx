@@ -22,7 +22,14 @@ const DEVICE_SUMMARY = gql`
       minValue
       maxValue
       avgValue
+      periodEnd
     }
+  }
+`
+
+const ALERT_SUMMARY = gql`
+  query AlertSummary {
+    alertSummary { active critical }
   }
 `
 
@@ -62,21 +69,20 @@ const SENSOR_META: Record<string, { color: string; unit: string; label: string }
 }
 
 const TIME_OPTIONS = [
-  { label: '1 h',  hours: 1  },
-  { label: '6 h',  hours: 6  },
-  { label: '24 h', hours: 24 },
-  { label: '48 h', hours: 48 },
+  { label: '1 h',  hours: 1   },
+  { label: '6 h',  hours: 6   },
+  { label: '24 h', hours: 24  },
+  { label: '7 d',  hours: 168 },
+  { label: '30 d', hours: 720 },
 ]
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, unit, color }: { label: string; value: number | null | undefined; unit: string; color: string }) {
+function KpiCard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="bg-slate-800 rounded-xl p-4">
       <p className="text-xs text-slate-400 mb-1">{label}</p>
-      <p className={`text-2xl font-semibold ${color}`}>
-        {value != null ? `${Number(value).toFixed(1)}${unit}` : '—'}
-      </p>
+      <p className={`text-2xl font-semibold ${color}`}>{value}</p>
     </div>
   )
 }
@@ -147,12 +153,23 @@ export default function Dashboard() {
     skip: !selectedId,
     pollInterval: 30000,
   })
+  const { data: alertData } = useQuery(ALERT_SUMMARY, { pollInterval: 30000 })
 
   const summaries: any[] = (summaryData as any)?.deviceSummary ?? []
-  const tempSummary = summaries.find((s) => s.sensorType === 'temperature')
   const activeSensors = summaries.map((s) => s.sensorType)
 
   const selectedDevice = devices.find((d) => d.id === selectedId)
+
+  // KPIs
+  const activeAlerts = (alertData as any)?.alertSummary?.active ?? 0
+  const totalReadings = summaries.reduce((acc, s) => acc + s.readingCount, 0)
+  const lastReadingAt = summaries.reduce<string | null>((latest, s) => {
+    if (!s.periodEnd) return latest
+    return !latest || new Date(s.periodEnd) > new Date(latest) ? s.periodEnd : latest
+  }, null)
+  const lastReadingLabel = lastReadingAt
+    ? new Date(lastReadingAt).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '—'
 
   return (
     <div>
@@ -191,17 +208,12 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* ── Summary cards (temperature stats for selected device) ── */}
+      {/* ── KPI cards ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        <StatCard label="Avg Temp" value={tempSummary?.avgValue} unit="°C" color="text-orange-400" />
-        <StatCard label="Min Temp" value={tempSummary?.minValue} unit="°C" color="text-blue-400" />
-        <StatCard label="Max Temp" value={tempSummary?.maxValue} unit="°C" color="text-red-400" />
-        <div className="bg-slate-800 rounded-xl p-4">
-          <p className="text-xs text-slate-400 mb-1">Readings ({hours}h)</p>
-          <p className="text-2xl font-semibold text-slate-100">
-            {summaries.reduce((acc, s) => acc + s.readingCount, 0) || '—'}
-          </p>
-        </div>
+        <KpiCard label="Dispositivos activos" value={String(devices.length)} color="text-blue-400" />
+        <KpiCard label="Alertas activas" value={String(activeAlerts)} color={activeAlerts > 0 ? 'text-red-400' : 'text-green-400'} />
+        <KpiCard label="Última lectura" value={lastReadingLabel} color="text-slate-100" />
+        <KpiCard label={`Lecturas (${hours}h)`} value={totalReadings ? String(totalReadings) : '—'} color="text-slate-100" />
       </div>
 
       {/* ── Charts ── */}
