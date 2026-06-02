@@ -5,9 +5,11 @@ import Layout from './components/Layout'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import AlertRules from './pages/AlertRules'
 import Alerts from './pages/Alerts'
+import Analytics from './pages/Analytics'
 import Dashboard from './pages/Dashboard'
 import Devices from './pages/Devices'
 import Login from './pages/Login'
+import Users from './pages/Users'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
@@ -30,6 +32,8 @@ function AppRoutes() {
         <Route path="devices" element={<Devices />} />
         <Route path="alert-rules" element={<AlertRules />} />
         <Route path="alerts" element={<Alerts />} />
+        <Route path="analytics" element={<Analytics />} />
+        <Route path="users" element={<Users />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -1,4 +1,4 @@
-import { Activity, Bell, Cpu, LayoutDashboard, LogOut, SlidersHorizontal } from 'lucide-react'
+import { Activity, BarChart3, Bell, Cpu, LayoutDashboard, LogOut, SlidersHorizontal, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -26,10 +26,14 @@ export default function Layout() {
   }
 
   const NAV = [
-    { to: '/',            icon: LayoutDashboard,  label: 'Dashboard',   badge: 0            },
+    { to: '/',            icon: LayoutDashboard,   label: 'Dashboard',   badge: 0            },
     { to: '/devices',     icon: Cpu,               label: 'Devices',     badge: 0            },
     { to: '/alert-rules', icon: SlidersHorizontal, label: 'Alert Rules', badge: 0            },
     { to: '/alerts',      icon: Bell,              label: 'Alerts',      badge: activeAlerts },
+    { to: '/analytics',   icon: BarChart3,         label: 'Analytics',   badge: 0            },
+    ...(user?.role === 'admin'
+      ? [{ to: '/users', icon: Users, label: 'Users', badge: 0 }]
+      : []),
   ]
 
   return (
