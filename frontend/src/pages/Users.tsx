@@ -72,8 +72,8 @@ export default function Users() {
       {users.length === 0 ? (
         <EmptyState icon={<UsersIcon size={28} />} title="Sin usuarios" />
       ) : (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr>
                 <th className={TH}>Email</th>

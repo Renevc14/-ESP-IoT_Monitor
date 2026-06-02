@@ -24,13 +24,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(email: string, password: string) {
     const { data } = await api.post('/auth/login', { email, password })
+    // El refresh token viaja en cookie HttpOnly; solo guardamos el access token
     sessionStorage.setItem('access_token', data.access_token)
-    sessionStorage.setItem('refresh_token', data.refresh_token)
     sessionStorage.setItem('user', JSON.stringify(data.user))
     setUser(data.user)
   }
 
   function logout() {
+    api.post('/auth/logout').catch(() => {})
     sessionStorage.clear()
     setUser(null)
   }

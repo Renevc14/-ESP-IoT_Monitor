@@ -142,8 +142,8 @@ export default function AlertRules() {
       {rules.length === 0 ? (
         <EmptyState icon={<SlidersHorizontal size={28} />} title="No hay reglas configuradas" />
       ) : (
-        <Card className="overflow-hidden">
-          <table className="w-full text-sm">
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[680px]">
             <thead>
               <tr>
                 <th className={TH}>Dispositivo</th>
