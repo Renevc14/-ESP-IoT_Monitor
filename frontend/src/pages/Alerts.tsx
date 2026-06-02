@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
   return <span className={`text-xs px-2 py-0.5 rounded-full ${cls}`}>{status}</span>
 }
 
-type StatusFilter   = 'all' | 'active' | 'acknowledged'
+type StatusFilter   = 'all' | 'active' | 'acknowledged' | 'resolved'
 type SeverityFilter = 'all' | 'warning' | 'critical'
 
 export default function Alerts() {
@@ -36,6 +36,8 @@ export default function Alerts() {
   const [wsStatus, setWsStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting')
   const [statusFilter,   setStatusFilter]   = useState<StatusFilter>('all')
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate,   setToDate]   = useState('')
   const wsRef = useRef<WebSocket | null>(null)
 
   // Device lookup map
@@ -91,10 +93,24 @@ export default function Alerts() {
     } catch {}
   }
 
-  // Client-side filtering
+  async function resolve(id: string) {
+    try {
+      await api.patch(`/alerts/${id}/resolve`)
+      setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, status: 'resolved' } : a))
+    } catch {}
+  }
+
+  // Client-side filtering (status, severity, date range)
+  const fromTs = fromDate ? new Date(fromDate).getTime() : null
+  const toTs   = toDate ? new Date(toDate).getTime() + 86_400_000 : null // inclusive end of day
   const visible = alerts.filter((a) => {
     if (statusFilter   !== 'all' && a.status   !== statusFilter)   return false
     if (severityFilter !== 'all' && a.severity !== severityFilter) return false
+    if (a.created_at) {
+      const ts = new Date(a.created_at).getTime()
+      if (fromTs && ts < fromTs) return false
+      if (toTs && ts > toTs) return false
+    }
     return true
   })
 
@@ -153,6 +169,7 @@ export default function Alerts() {
             <FilterBtn value="all"          current={statusFilter} onClick={setStatusFilter}>All</FilterBtn>
             <FilterBtn value="active"       current={statusFilter} onClick={setStatusFilter}>Active</FilterBtn>
             <FilterBtn value="acknowledged" current={statusFilter} onClick={setStatusFilter}>Acknowledged</FilterBtn>
+            <FilterBtn value="resolved"     current={statusFilter} onClick={setStatusFilter}>Resolved</FilterBtn>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -162,6 +179,18 @@ export default function Alerts() {
             <FilterBtn value="critical" current={severityFilter} onClick={setSeverityFilter}>Critical</FilterBtn>
             <FilterBtn value="warning"  current={severityFilter} onClick={setSeverityFilter}>Warning</FilterBtn>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-400">Desde:</span>
+          <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
+            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+          <span className="text-xs text-slate-400">Hasta:</span>
+          <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
+            className="bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs text-white" />
+          {(fromDate || toDate) && (
+            <button onClick={() => { setFromDate(''); setToDate('') }}
+              className="text-xs text-slate-400 hover:text-white">limpiar</button>
+          )}
         </div>
       </div>
 
@@ -198,14 +227,24 @@ export default function Alerts() {
                     {a.created_at ? new Date(a.created_at).toLocaleString() : '—'}
                   </td>
                   <td className="px-4 py-3">
-                    {a.status === 'active' && (
-                      <button
-                        onClick={() => acknowledge(a.id)}
-                        className="text-xs bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 px-2 py-1 rounded transition-colors"
-                      >
-                        Acknowledge
-                      </button>
-                    )}
+                    <div className="flex gap-2">
+                      {a.status === 'active' && (
+                        <button
+                          onClick={() => acknowledge(a.id)}
+                          className="text-xs bg-blue-600/30 hover:bg-blue-600/50 text-blue-400 px-2 py-1 rounded transition-colors"
+                        >
+                          Acknowledge
+                        </button>
+                      )}
+                      {a.status !== 'resolved' && (
+                        <button
+                          onClick={() => resolve(a.id)}
+                          className="text-xs bg-green-600/30 hover:bg-green-600/50 text-green-400 px-2 py-1 rounded transition-colors"
+                        >
+                          Resolve
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
