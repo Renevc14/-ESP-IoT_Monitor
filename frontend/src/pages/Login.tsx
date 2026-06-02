@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react'
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Input, Label } from '../components/ui/Field'
 import { useAuth } from '../context/AuthContext'
@@ -79,6 +79,12 @@ export default function Login() {
               {loading ? 'Ingresando…' : 'Ingresar'}
             </Button>
           </form>
+
+          <p className="mt-4 text-center text-xs">
+            <Link to="/forgot-password" className="text-faint hover:text-accent transition-colors">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
         </div>
 
         <p className="mt-5 text-center text-xs text-faint">
