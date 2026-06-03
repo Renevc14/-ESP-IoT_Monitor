@@ -1,0 +1,15 @@
+# Coverage scoped to business logic. Routers/DB/models/glue are exercised by the
+# integration test suite (tests/) against the real stack.
+[run]
+omit =
+    app/main.py
+    app/config.py
+    app/db/*
+    app/models/*
+    app/schemas/*
+    app/routers/*
+    app/__init__.py
+
+[report]
+show_missing = True
+fail_under = 80

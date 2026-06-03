@@ -7,61 +7,53 @@ Basada en Arquitectura de Microservicios, GraphQL y Seguridad OWASP
 
 ---
 
-## Architecture
+## Architecture (Database per Service)
 
 ```
-Users / IoT Simulator
-         │
-         ▼ HTTP
-    ┌─────────────┐
-    │ API Gateway │  :8000  JWT Auth · RBAC · Rate Limiting (Redis)
-    └──────┬──────┘
-           │
-    ┌──────┼────────────────────┐
-    ▼      ▼                    ▼
-┌──────────────┐  ┌─────────────────┐  ┌──────────────────────┐
-│  Ingestion   │  │   Analytics     │  │       Alerts         │
-│   :8001      │  │   :8004         │  │       :8003          │
-│  FastAPI     │  │  Strawberry     │  │  Threshold Engine    │
-│  REST ingest │  │  GraphQL API    │  │  WebSocket broadcast │
-└──────┬───────┘  └─────────────────┘  └──────────┬───────────┘
-       │                                            ▲
-       ▼                                            │
-  [RabbitMQ] ──── fanout exchange ─────────────────┘
-  sensor_data_exchange                 (alerts_queue)
-       │
-       │ (processing_queue)
-       ▼
-┌──────────────┐
-│  Processing  │
-│   :8002      │
-│  Consumer    │
-└──────┬───────┘
-       │
-  ┌────┴──────────┐
-  ▼               ▼
-[postgres-timescale]  [Redis :6379]
-PostgreSQL 16          Cache · Rate limiting
-+ TimescaleDB
-  (contenedor local)
+                       Navegador / Simulador
+                                │
+        REST ▼ (proxy)          │ GraphQL+WS ▼ (directo)
+                ┌───────────────────────┐
+                │   API Gateway  :8000   │  proxy de borde: JWT · rate-limit · headers
+                └───┬───────┬───────┬────┘
+        ┌───────────┘       │       └─────────────┐
+        ▼                   ▼                      ▼
+   ┌──────────┐       ┌──────────┐           ┌──────────┐
+   │ identity │       │ registry │           │  alerts  │  reglas + alertas + WS + email
+   │  :8005   │       │  :8006   │           │  :8003   │◄────────┐
+   └────┬─────┘       └────┬─────┘           └────┬─────┘         │ (composición API)
+        ▼                  ▼                      ▼               │
+  [identity-db]      [registry-db]           [alerts-db]          │
+   users/sessions     devices                rules/alerts         │
+   /audit (PG)        (PG)                    (PG)                 │
+                                                                   │
+   ingestion :8001 ─► [RabbitMQ fanout] ─► processing :8002 ─► [timeseries-db]
+   (sin BD)            sensor_data_exchange    └─► Redis (caché)    TimescaleDB
+                              │                                     ▲ (lectura)
+                              └──► analytics :8004 (GraphQL + subs) ┘
 ```
 
-### Containers (10 total)
+Cada servicio es **dueño de su propia base de datos** (Database per Service); no hay JOINs entre dominios — analytics compone datos de registry/alerts por **API**.
+
+### Containers
 
 | Container | Port | Description |
 |-----------|------|-------------|
-| `gateway` | 8000 | API Gateway — JWT auth, RBAC, routing, rate limiting, security headers, audit |
-| `ingestion` | 8001 | IoT data ingestion — validates and publishes to RabbitMQ |
-| `processing` | 8002 | Event consumer — stores readings in TimescaleDB + Redis |
-| `alerts` | 8003 | Alert engine — threshold evaluation + WebSocket + email (SMTP) |
-| `analytics` | 8004 | GraphQL API (Strawberry) + CSV/JSON export |
-| `frontend` | 80 | React dashboard — charts, alerts, devices, analytics, users |
-| `postgres-timescale` | 5432 | PostgreSQL 16 + TimescaleDB — migrations auto-aplicadas al primer arranque |
-| `rabbitmq` | 5672/15672 | Message broker — fanout exchange `sensor_data_exchange` |
-| `redis` | 6379 | Cache (latest readings) + rate limiting sliding window |
-| `mailhog` | 1025/8025 | SMTP de demostración para notificaciones de alertas (UI en :8025) |
+| `gateway` | 8000 | Proxy de borde — JWT, rate limiting (Redis), security headers; enruta a los servicios |
+| `identity` | 8005 | Autenticación JWT, usuarios (RBAC), auditoría → **identity-db** |
+| `registry` | 8006 | Catálogo de dispositivos → **registry-db** |
+| `ingestion` | 8001 | Ingesta IoT — valida y publica a RabbitMQ (sin BD) |
+| `processing` | 8002 | Consumidor — persiste lecturas → **timeseries-db** + Redis |
+| `alerts` | 8003 | Reglas + evaluación de umbrales + WebSocket + email → **alerts-db** |
+| `analytics` | 8004 | GraphQL (Strawberry) + suscripciones + export; lee **timeseries-db** + composición API |
+| `frontend` | 80 | Dashboard React |
+| `identity-db` / `registry-db` / `alerts-db` | — | PostgreSQL 16 (un esquema por contexto) |
+| `timeseries-db` | — | PostgreSQL 16 + TimescaleDB (hypertable de lecturas) |
+| `rabbitmq` | 5672/15672 | Broker — fanout `sensor_data_exchange` |
+| `redis` | 6379 | Caché (última lectura) + rate limiting |
+| `mailhog` | 1025/8025 | SMTP de demostración (UI en :8025) |
 
-**Database**: contenedor local `postgres-timescale` por defecto. `DATABASE_URL` puede apuntarse a Timescale Cloud (externo) sin más cambios.
+**Bases de datos:** una instancia por servicio (las migraciones de cada una en `db/<servicio>/`, auto-aplicadas al primer arranque). Las BDs no exponen puertos al host (solo red interna).
 
 ---
 
@@ -365,15 +357,16 @@ GitHub Actions ejecuta en cada push/PR (`.github/workflows/ci.yml`): (1) pruebas
 
 ---
 
-## Deuda técnica conocida / Evolución
+## Decisiones de arquitectura
 
-**API Gateway con responsabilidades de dominio (acoplamiento).** Actualmente el Gateway, además de enrutar/autenticar/limitar, **es dueño de la lógica** de usuarios, dispositivos y reglas de alerta, escribiendo directamente en los esquemas `auth`, `iot` y `alerts`.
+**Database per Service + Gateway como proxy (resuelto).** El antiguo acoplamiento (un Gateway "gordo" dueño de varios dominios sobre una instancia de BD compartida) se eliminó:
 
-- *Por qué es un punto a mejorar:* un API Gateway "puro" debería solo enrutar y delegar; al contener lógica de varios dominios se acopla a múltiples esquemas y dificulta el escalado/propiedad independiente de datos (relacionado con la decisión de instancia de BD compartida con esquemas por dominio, Cap. 8.2).
-- *Por qué se mantiene así:* es una decisión pragmática y suficiente para el alcance académico local; el documento la contempla como **evolución** (Cap. 14).
-- *Propuesta de solución (trabajo futuro):* extraer un **servicio de dominio** (p. ej. `registry`/`identity`) dueño de usuarios/dispositivos/reglas con su propia base; el Gateway pasaría a hacer solo *proxy* autenticado hacia ese servicio (como ya hace con `alerts`/`analytics`). Es una reestructuración, no una corrección, por lo que se difiere conscientemente.
+- El **Gateway** quedó como **proxy de borde**: valida JWT, aplica rate-limit y headers de seguridad, y enruta a los servicios. No tiene base de datos.
+- Se extrajeron los servicios de dominio **`identity`** (usuarios/sesiones/auditoría) y **`registry`** (dispositivos); las **reglas de alerta** pasaron a ser propiedad del servicio **`alerts`**.
+- Cada servicio tiene su **propia base de datos** (`identity-db`, `registry-db`, `alerts-db`, `timeseries-db`). No hay claves foráneas entre bases; `analytics` (lado de lectura/CQRS) lee `timeseries-db` y **compone** dispositivos/alertas vía API.
+- Cada servicio re-valida el JWT (secreto compartido) y aplica RBAC por *claims*.
 
-> Otras mejoras ya aplicadas en esta etapa: autenticación en los WebSockets, `publisher_confirms` configurable (garantía de entrega por defecto), colas exclusivas por instancia para suscripciones escalables, e imágenes Docker fijadas por digest.
+> Mejoras de la etapa previa que se conservan: autenticación en los WebSockets, `publisher_confirms` configurable (garantía de entrega por defecto), colas exclusivas por instancia para suscripciones escalables e imágenes Docker fijadas por digest.
 
 ---
 
