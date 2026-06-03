@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app import consumer
 from app.config import settings
 from app.routers.alerts import router
+from app.routers.rules import router as rules_router
 
 logging.basicConfig(level=logging.INFO)
 
@@ -48,6 +49,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(rules_router)
 
 
 @app.get("/health", tags=["Health"])

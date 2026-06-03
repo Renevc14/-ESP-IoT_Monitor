@@ -1,9 +1,12 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
+import httpx
 import strawberry
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import settings
 
 from app.types.schema import AlertSummaryType, AlertType, BucketedReadingType, DeviceSummaryType, DeviceType, SensorReadingType
 
@@ -96,31 +99,35 @@ async def resolve_device_summary(
         ]
 
 
+# ── Composición de API (datos de otros servicios) ───────────────────────────
+# devices vive en registry, alerts en el servicio de alertas. Analytics (lado de
+# lectura/CQRS) los compone vía HTTP en lugar de hacer JOIN entre bases.
+
+def _auth_headers(info) -> dict:
+    auth = info.context.get("auth")
+    return {"Authorization": auth} if auth else {}
+
+
 async def resolve_devices(
     info: strawberry.types.Info,
     is_active: Optional[bool] = None,
 ) -> List[DeviceType]:
-    session_factory = info.context["session_factory"]
-    async with session_factory() as session:
-        query = "SELECT id, name, device_type, location, is_active, created_at FROM iot.devices"
-        params: dict = {}
-        if is_active is not None:
-            query += " WHERE is_active = :is_active"
-            params["is_active"] = is_active
-        query += " ORDER BY created_at DESC"
-        result = await session.execute(text(query), params)
-        rows = result.fetchall()
-        return [
-            DeviceType(
-                id=str(r[0]),
-                name=r[1],
-                device_type=r[2],
-                location=r[3],
-                is_active=r[4],
-                created_at=r[5],
-            )
-            for r in rows
-        ]
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{settings.registry_url}/devices", headers=_auth_headers(info))
+        resp.raise_for_status()
+        rows = resp.json()
+    return [
+        DeviceType(
+            id=str(d["id"]),
+            name=d["name"],
+            device_type=d["device_type"],
+            location=d.get("location"),
+            is_active=d["is_active"],
+            created_at=datetime.fromisoformat(d["created_at"]),
+        )
+        for d in rows
+        if is_active is None or d["is_active"] == is_active
+    ]
 
 
 async def resolve_alerts(
@@ -129,51 +136,35 @@ async def resolve_alerts(
     status: Optional[str] = None,
     limit: int = 50,
 ) -> List[AlertType]:
-    session_factory = info.context["session_factory"]
-    async with session_factory() as session:
-        query = "SELECT id, rule_id, device_id, triggered_value, severity, status, created_at FROM alerts.alerts"
-        conditions, params = [], {}
-        if device_id:
-            conditions.append("device_id = :device_id")
-            params["device_id"] = device_id
-        if status:
-            conditions.append("status = :status")
-            params["status"] = status
-        if conditions:
-            query += " WHERE " + " AND ".join(conditions)
-        query += " ORDER BY created_at DESC LIMIT :limit"
-        params["limit"] = limit
-        result = await session.execute(text(query), params)
-        rows = result.fetchall()
-        return [
-            AlertType(
-                id=str(r[0]),
-                rule_id=str(r[1]),
-                device_id=str(r[2]),
-                triggered_value=float(r[3]),
-                severity=r[4],
-                status=r[5],
-                created_at=r[6],
-            )
-            for r in rows
-        ]
+    params: dict = {"limit": limit}
+    if status:
+        params["status"] = status
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{settings.alerts_url}/alerts", params=params)
+        resp.raise_for_status()
+        rows = resp.json()
+    out = []
+    for a in rows:
+        if device_id and str(a["device_id"]) != device_id:
+            continue
+        out.append(AlertType(
+            id=str(a["id"]),
+            rule_id="",
+            device_id=str(a["device_id"]),
+            triggered_value=float(a["triggered_value"]),
+            severity=a["severity"],
+            status=a["status"],
+            created_at=datetime.fromisoformat(a["created_at"]),
+        ))
+    return out
 
 
 async def resolve_alert_summary(info: strawberry.types.Info) -> AlertSummaryType:
-    session_factory = info.context["session_factory"]
-    async with session_factory() as session:
-        result = await session.execute(
-            text("""
-                SELECT
-                    COUNT(*) AS total,
-                    COUNT(*) FILTER (WHERE status = 'active') AS active,
-                    COUNT(*) FILTER (WHERE severity = 'critical') AS critical,
-                    COUNT(*) FILTER (WHERE severity = 'warning') AS warning
-                FROM alerts.alerts
-            """)
-        )
-        r = result.fetchone()
-        return AlertSummaryType(total=r[0], active=r[1], critical=r[2], warning=r[3])
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(f"{settings.alerts_url}/alerts/summary")
+        resp.raise_for_status()
+        d = resp.json()
+    return AlertSummaryType(total=d["total"], active=d["active"], critical=d["critical"], warning=d["warning"])
 
 
 async def resolve_bucketed_readings(

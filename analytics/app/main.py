@@ -77,7 +77,9 @@ async def lifespan(app: FastAPI):
             if not _valid_access_token(websocket.query_params.get("token")):
                 await websocket.close(code=1008)
                 raise RuntimeError("unauthorized websocket")
-        return {"session_factory": session_factory}
+        # En HTTP reenviamos el Authorization para la composición de API (registry/alerts)
+        auth = request.headers.get("authorization") if request is not None else None
+        return {"session_factory": session_factory, "auth": auth}
 
     graphql_app = GraphQLRouter(schema, context_getter=get_context)
     app.include_router(graphql_app, prefix="/graphql")

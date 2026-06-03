@@ -8,6 +8,9 @@ class Settings(BaseSettings):
     exchange_name: str = "sensor_data_exchange"
     queue_name: str = "analytics_queue"
     jwt_secret_key: str = ""
+    # Composición de API (los dispositivos y alertas viven en otros servicios)
+    registry_url: str = "http://registry:8006"
+    alerts_url: str = "http://alerts:8003"
 
     class Config:
         env_file = ".env"

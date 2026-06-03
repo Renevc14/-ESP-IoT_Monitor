@@ -49,6 +49,22 @@ async def list_alerts(
         ]
 
 
+@router.get("/alerts/summary", tags=["Alerts"])
+async def alerts_summary(session_factory: async_sessionmaker = Depends(_get_session_factory)):
+    from sqlalchemy import func
+    async with session_factory() as session:
+        result = await session.execute(
+            select(
+                func.count().label("total"),
+                func.count().filter(Alert.status == "active").label("active"),
+                func.count().filter(Alert.severity == "critical").label("critical"),
+                func.count().filter(Alert.severity == "warning").label("warning"),
+            )
+        )
+        r = result.one()
+        return {"total": r.total, "active": r.active, "critical": r.critical, "warning": r.warning}
+
+
 @router.patch("/alerts/{alert_id}/acknowledge", tags=["Alerts"])
 async def acknowledge_alert(
     alert_id: uuid.UUID,

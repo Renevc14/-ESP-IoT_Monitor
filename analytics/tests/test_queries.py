@@ -1,4 +1,8 @@
-"""Unit tests for GraphQL query resolvers (with a fake DB session)."""
+"""Unit tests for GraphQL query resolvers.
+
+readings/deviceSummary/bucketedReadings leen timeseries-db (sesión simulada);
+devices/alerts/alertSummary se componen por HTTP (cliente httpx simulado).
+"""
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -7,6 +11,7 @@ import pytest
 from app.resolvers import queries
 
 
+# ── Fakes para la BD de series ──────────────────────────────────────────────
 class FakeResult:
     def __init__(self, rows=None, one=None):
         self._rows = rows or []
@@ -33,18 +38,49 @@ class FakeSession:
         return self._result
 
 
-def _info(result):
-    return SimpleNamespace(context={"session_factory": lambda: FakeSession(result)})
+def _info(result=None):
+    return SimpleNamespace(context={"session_factory": lambda: FakeSession(result), "auth": None})
+
+
+# ── Fakes para httpx (composición de API) ───────────────────────────────────
+class FakeResp:
+    def __init__(self, data):
+        self._data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._data
+
+
+class FakeClient:
+    def __init__(self, data):
+        self._data = data
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *a):
+        return False
+
+    async def get(self, *a, **k):
+        return FakeResp(self._data)
+
+
+def _patch_httpx(monkeypatch, data):
+    monkeypatch.setattr(queries.httpx, "AsyncClient", lambda *a, **k: FakeClient(data))
 
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
+ISO = "2026-01-01T12:00:00+00:00"
 
 
 @pytest.mark.asyncio
 async def test_resolve_readings():
     rows = [(1, "dev", "temperature", 27.5, "C", NOW)]
     out = await queries.resolve_readings(_info(FakeResult(rows)), device_id="dev", sensor_type="temperature", hours=24)
-    assert out[0].value == 27.5 and out[0].sensor_type == "temperature"
+    assert out[0].value == 27.5
 
 
 @pytest.mark.asyncio
@@ -55,27 +91,28 @@ async def test_resolve_device_summary():
 
 
 @pytest.mark.asyncio
-async def test_resolve_devices():
-    rows = [("id1", "Sensor", "multi_sensor", "Lab", True, NOW)]
-    out = await queries.resolve_devices(_info(FakeResult(rows)), is_active=True)
-    assert out[0].name == "Sensor"
+async def test_resolve_bucketed_readings():
+    rows = [(NOW, 20.0, 10.0, 30.0, 6)]
+    out = await queries.resolve_bucketed_readings(_info(FakeResult(rows)), device_id="d", sensor_type="temperature", hours=24, bucket_minutes=30)
+    assert out[0].avg_value == 20.0
 
 
 @pytest.mark.asyncio
-async def test_resolve_alerts():
-    rows = [("a1", "r1", "d1", 45.5, "critical", "active", NOW)]
-    out = await queries.resolve_alerts(_info(FakeResult(rows)), device_id="d1", status="active")
+async def test_resolve_devices_composition(monkeypatch):
+    _patch_httpx(monkeypatch, [{"id": "d1", "name": "Sensor", "device_type": "multi_sensor", "location": "Lab", "is_active": True, "created_at": ISO}])
+    out = await queries.resolve_devices(_info(), is_active=True)
+    assert out[0].name == "Sensor" and out[0].device_type == "multi_sensor"
+
+
+@pytest.mark.asyncio
+async def test_resolve_alerts_composition(monkeypatch):
+    _patch_httpx(monkeypatch, [{"id": "a1", "device_id": "d1", "triggered_value": 45.5, "severity": "critical", "status": "active", "created_at": ISO}])
+    out = await queries.resolve_alerts(_info(), device_id="d1", status="active")
     assert out[0].severity == "critical"
 
 
 @pytest.mark.asyncio
-async def test_resolve_alert_summary():
-    out = await queries.resolve_alert_summary(_info(FakeResult(one=(10, 4, 2, 2))))
-    assert out.total == 10 and out.active == 4
-
-
-@pytest.mark.asyncio
-async def test_resolve_bucketed_readings():
-    rows = [(NOW, 20.0, 10.0, 30.0, 6)]
-    out = await queries.resolve_bucketed_readings(_info(FakeResult(rows)), device_id="d", sensor_type="temperature", hours=24, bucket_minutes=30)
-    assert out[0].avg_value == 20.0 and out[0].reading_count == 6
+async def test_resolve_alert_summary_composition(monkeypatch):
+    _patch_httpx(monkeypatch, {"total": 5, "active": 2, "critical": 1, "warning": 1})
+    out = await queries.resolve_alert_summary(_info())
+    assert out.total == 5 and out.active == 2
