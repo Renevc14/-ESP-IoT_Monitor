@@ -1,4 +1,4 @@
-"""Unit tests for the alert evaluation logic (threshold operators + evaluate)."""
+"""Unit tests for alert evaluation (operators + full evaluate path)."""
 import uuid
 
 import pytest
@@ -16,22 +16,47 @@ def test_operator_truth_table():
     assert not ev._OPERATORS["lte"](41, 40)
 
 
-class _FakeSession:
+class FakeScalars:
+    def __init__(self, items):
+        self._items = items
+
+    def all(self):
+        return self._items
+
+
+class FakeResult:
+    def __init__(self, items):
+        self._items = items
+
+    def scalars(self):
+        return FakeScalars(self._items)
+
+
+class FakeSession:
+    def __init__(self, rules):
+        self.rules = rules
+        self.added = []
+
     async def __aenter__(self):
         return self
 
-    async def __aexit__(self, *args):
+    async def __aexit__(self, *a):
         return False
+
+    async def execute(self, *a, **k):
+        return FakeResult(self.rules)
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    async def flush(self):
+        pass
 
     async def commit(self):
         pass
 
     async def refresh(self, obj):
         pass
-
-
-def _fake_factory():
-    return _FakeSession()
 
 
 def _rule(operator="gt", threshold=40.0, severity="critical", emails=None):
@@ -45,14 +70,12 @@ def _rule(operator="gt", threshold=40.0, severity="critical", emails=None):
     })()
 
 
-def _patch_common(monkeypatch, rules):
+def _factory(rules):
+    return lambda: FakeSession(rules)
+
+
+def _patch(monkeypatch):
     broadcasts, emails = [], []
-
-    async def fake_rules(session, device_id, sensor_type):
-        return rules
-
-    async def fake_create(session, rule, value):
-        return type("Alert", (), {"id": uuid.uuid4(), "device_id": rule.device_id, "severity": rule.severity})()
 
     async def fake_broadcast(payload):
         broadcasts.append(payload)
@@ -60,38 +83,32 @@ def _patch_common(monkeypatch, rules):
     async def fake_email(recipients, **kwargs):
         emails.append((recipients, kwargs))
 
-    monkeypatch.setattr(ev, "_get_active_rules", fake_rules)
-    monkeypatch.setattr(ev, "_create_alert", fake_create)
     monkeypatch.setattr(ev.manager, "broadcast", fake_broadcast)
     monkeypatch.setattr(ev, "send_alert_email", fake_email)
     return broadcasts, emails
 
 
 @pytest.mark.asyncio
-async def test_evaluate_triggers_alert_above_threshold(monkeypatch):
-    rule = _rule(operator="gt", threshold=40.0, severity="critical")
-    broadcasts, emails = _patch_common(monkeypatch, [rule])
-
+async def test_evaluate_triggers_alert(monkeypatch):
+    rule = _rule(operator="gt", threshold=40.0, severity="critical", emails=["ops@iot.local"])
+    broadcasts, emails = _patch(monkeypatch)
     await ev.evaluate(
         {"device_id": str(rule.device_id), "sensor_type": "temperature", "value": 45.5},
-        _fake_factory,
+        _factory([rule]),
     )
-
     assert len(broadcasts) == 1
     assert broadcasts[0]["severity"] == "critical"
     assert broadcasts[0]["event"] == "alert_triggered"
-    assert len(emails) == 1
+    assert emails and emails[0][0] == ["ops@iot.local"]
 
 
 @pytest.mark.asyncio
 async def test_evaluate_no_alert_below_threshold(monkeypatch):
     rule = _rule(operator="gt", threshold=40.0)
-    broadcasts, emails = _patch_common(monkeypatch, [rule])
-
+    broadcasts, emails = _patch(monkeypatch)
     await ev.evaluate(
         {"device_id": str(rule.device_id), "sensor_type": "temperature", "value": 21.0},
-        _fake_factory,
+        _factory([rule]),
     )
-
     assert broadcasts == []
     assert emails == []
