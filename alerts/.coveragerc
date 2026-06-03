@@ -1,0 +1,14 @@
+# Coverage scoped to alert business logic; consumer/routers/glue covered by integration tests.
+[run]
+omit =
+    app/main.py
+    app/config.py
+    app/consumer.py
+    app/ws_manager.py
+    app/routers/*
+    app/models/*
+    app/__init__.py
+
+[report]
+show_missing = True
+fail_under = 80

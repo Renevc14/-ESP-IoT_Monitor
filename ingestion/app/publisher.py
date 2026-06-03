@@ -17,7 +17,9 @@ _exchange: aio_pika.abc.AbstractExchange | None = None
 async def connect() -> None:
     global _connection, _channel, _exchange
     _connection = await aio_pika.connect_robust(settings.rabbitmq_url)
-    _channel = await _connection.channel()
+    # publisher_confirms=False: alto throughput (no espera ack por mensaje);
+    # los mensajes siguen siendo PERSISTENT y la cola es durable.
+    _channel = await _connection.channel(publisher_confirms=False)
     _exchange = await _channel.declare_exchange(
         settings.exchange_name,
         ExchangeType.FANOUT,

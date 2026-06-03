@@ -1,0 +1,40 @@
+name: Security Scan (OWASP ZAP)
+
+# Escaneo de seguridad dinámico (RNF-04). Manual o semanal — no bloquea los PRs.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1" # lunes 03:00 UTC
+
+jobs:
+  zap-baseline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generar .env
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_USER=iot
+          POSTGRES_PASSWORD=iot
+          POSTGRES_DB=iot
+          DATABASE_URL=postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot
+          JWT_SECRET_KEY=ci-secret-key-not-for-production-0123456789abcd
+          RABBITMQ_USER=guest
+          RABBITMQ_PASSWORD=guest
+          ALLOWED_ORIGINS=http://localhost
+          EOF
+      - name: Levantar stack
+        run: docker compose up -d --build
+      - name: Esperar al gateway
+        run: |
+          for i in $(seq 1 60); do
+            curl -fs http://localhost:8000/health >/dev/null 2>&1 && exit 0
+            sleep 3
+          done
+          docker compose logs; exit 1
+      - name: OWASP ZAP Baseline
+        uses: zaproxy/action-baseline@v0.12.0
+        with:
+          target: "http://localhost:8000"
+          # -I: informativo (no falla el job por advertencias). El reporte queda como artefacto.
+          cmd_options: "-I"
