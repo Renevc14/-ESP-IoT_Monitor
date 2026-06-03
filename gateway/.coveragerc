@@ -1,13 +1,10 @@
-# Coverage scoped to business logic. Routers/DB/models/glue are exercised by the
-# integration test suite (tests/) against the real stack.
+# El gateway es un proxy delgado: solo los middlewares tienen lógica unitaria.
+# El proxy/health se cubren con las pruebas de integración.
 [run]
 omit =
     app/main.py
     app/config.py
-    app/db/*
-    app/models/*
-    app/schemas/*
-    app/routers/*
+    app/proxy.py
     app/__init__.py
 
 [report]

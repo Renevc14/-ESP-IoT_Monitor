@@ -2,35 +2,26 @@ import secrets
 import uuid
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.dependencies import require_admin, require_operator
 from app.models.device import Device
-from app.models.user import User
 from app.schemas.device import DeviceCreate, DeviceCreatedResponse, DeviceResponse, DeviceUpdate
-from app.services.audit_service import client_ip, log_event
 
 router = APIRouter(prefix="/devices", tags=["Devices"])
 
 
 @router.get("", response_model=list[DeviceResponse])
-async def list_devices(
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_operator),
-):
+async def list_devices(db: AsyncSession = Depends(get_db), _=Depends(require_operator)):
     result = await db.execute(select(Device).order_by(Device.created_at))
     return result.scalars().all()
 
 
 @router.get("/{device_id}", response_model=DeviceResponse)
-async def get_device(
-    device_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_operator),
-):
+async def get_device(device_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(require_operator)):
     device = await db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
@@ -38,13 +29,7 @@ async def get_device(
 
 
 @router.post("", response_model=DeviceCreatedResponse, status_code=status.HTTP_201_CREATED)
-async def create_device(
-    body: DeviceCreate,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    actor: User = Depends(require_admin),
-):
-    # Token autogenerado si no se provee; se devuelve en claro una sola vez
+async def create_device(body: DeviceCreate, db: AsyncSession = Depends(get_db), _=Depends(require_admin)):
     raw_token = body.auth_token or secrets.token_urlsafe(24)
     token_hash = bcrypt.hashpw(raw_token.encode(), bcrypt.gensalt(rounds=12)).decode()
     device = Device(
@@ -56,26 +41,11 @@ async def create_device(
     db.add(device)
     await db.commit()
     await db.refresh(device)
-    await log_event(
-        "device_created",
-        user_id=actor.id,
-        resource=f"device:{device.id}",
-        ip=client_ip(request),
-        details={"name": device.name, "device_type": str(device.device_type)},
-    )
-    return DeviceCreatedResponse(
-        **DeviceResponse.model_validate(device).model_dump(),
-        auth_token=raw_token,
-    )
+    return DeviceCreatedResponse(**DeviceResponse.model_validate(device).model_dump(), auth_token=raw_token)
 
 
 @router.patch("/{device_id}", response_model=DeviceResponse)
-async def update_device(
-    device_id: uuid.UUID,
-    body: DeviceUpdate,
-    db: AsyncSession = Depends(get_db),
-    _=Depends(require_admin),
-):
+async def update_device(device_id: uuid.UUID, body: DeviceUpdate, db: AsyncSession = Depends(get_db), _=Depends(require_admin)):
     device = await db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
@@ -87,20 +57,9 @@ async def update_device(
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_device(
-    device_id: uuid.UUID,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    actor: User = Depends(require_admin),
-):
+async def delete_device(device_id: uuid.UUID, db: AsyncSession = Depends(get_db), _=Depends(require_admin)):
     device = await db.get(Device, device_id)
     if not device:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
     await db.delete(device)
     await db.commit()
-    await log_event(
-        "device_deleted",
-        user_id=actor.id,
-        resource=f"device:{device_id}",
-        ip=client_ip(request),
-    )
