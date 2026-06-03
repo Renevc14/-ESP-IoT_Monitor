@@ -1,0 +1,12 @@
+# Coverage scoped to resolvers/export/broadcaster; app glue covered by integration tests.
+[run]
+omit =
+    app/main.py
+    app/config.py
+    app/consumer.py
+    app/types/*
+    app/__init__.py
+
+[report]
+show_missing = True
+fail_under = 80
