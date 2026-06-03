@@ -45,7 +45,8 @@ export default function Alerts() {
   useEffect(() => { api.get('/alerts').then((r) => setAlerts(r.data)).catch(() => {}) }, [])
 
   useEffect(() => {
-    const ws = new WebSocket(`${WS_URL}/ws/alerts`)
+    const token = sessionStorage.getItem('access_token') ?? ''
+    const ws = new WebSocket(`${WS_URL}/ws/alerts?token=${encodeURIComponent(token)}`)
     wsRef.current = ws
     ws.onopen = () => setWsStatus('connected')
     ws.onclose = () => setWsStatus('disconnected')

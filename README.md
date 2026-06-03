@@ -365,6 +365,18 @@ GitHub Actions ejecuta en cada push/PR (`.github/workflows/ci.yml`): (1) pruebas
 
 ---
 
+## Deuda técnica conocida / Evolución
+
+**API Gateway con responsabilidades de dominio (acoplamiento).** Actualmente el Gateway, además de enrutar/autenticar/limitar, **es dueño de la lógica** de usuarios, dispositivos y reglas de alerta, escribiendo directamente en los esquemas `auth`, `iot` y `alerts`.
+
+- *Por qué es un punto a mejorar:* un API Gateway "puro" debería solo enrutar y delegar; al contener lógica de varios dominios se acopla a múltiples esquemas y dificulta el escalado/propiedad independiente de datos (relacionado con la decisión de instancia de BD compartida con esquemas por dominio, Cap. 8.2).
+- *Por qué se mantiene así:* es una decisión pragmática y suficiente para el alcance académico local; el documento la contempla como **evolución** (Cap. 14).
+- *Propuesta de solución (trabajo futuro):* extraer un **servicio de dominio** (p. ej. `registry`/`identity`) dueño de usuarios/dispositivos/reglas con su propia base; el Gateway pasaría a hacer solo *proxy* autenticado hacia ese servicio (como ya hace con `alerts`/`analytics`). Es una reestructuración, no una corrección, por lo que se difiere conscientemente.
+
+> Otras mejoras ya aplicadas en esta etapa: autenticación en los WebSockets, `publisher_confirms` configurable (garantía de entrega por defecto), colas exclusivas por instancia para suscripciones escalables, e imágenes Docker fijadas por digest.
+
+---
+
 ## License
 
 Academic project — Universidad Católica Boliviana "San Pablo" 2026

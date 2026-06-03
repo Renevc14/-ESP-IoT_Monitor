@@ -20,13 +20,11 @@ function emitStatus(connected: boolean) {
 function getClient(): Client {
   if (!client) {
     client = createClient({
-      url: WS_URL,
+      // El token va como query param (se re-lee en cada reconexión) y el servidor
+      // valida el JWT en el handshake del WebSocket.
+      url: () => `${WS_URL}?token=${encodeURIComponent(sessionStorage.getItem('access_token') ?? '')}`,
       lazy: true,
       retryAttempts: 10,
-      connectionParams: () => {
-        const token = sessionStorage.getItem('access_token')
-        return token ? { authorization: `Bearer ${token}` } : {}
-      },
       on: {
         connected: () => emitStatus(true),
         closed: () => emitStatus(false),

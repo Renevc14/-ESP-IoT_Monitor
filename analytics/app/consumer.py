@@ -21,7 +21,10 @@ async def start_consuming() -> None:
     await channel.set_qos(prefetch_count=20)
 
     exchange = await channel.declare_exchange(settings.exchange_name, ExchangeType.FANOUT, durable=True)
-    queue = await channel.declare_queue(settings.queue_name, durable=True)
+    # Cola exclusiva y efímera (nombre generado por el broker): así CADA instancia de
+    # analytics recibe TODAS las lecturas (no hay competing-consumers entre réplicas),
+    # de modo que las suscripciones GraphQL funcionan con escalado horizontal (RNF-06).
+    queue = await channel.declare_queue(exclusive=True, auto_delete=True)
     await queue.bind(exchange)
 
     logger.info("Analytics consumer started — queue: %s", settings.queue_name)
