@@ -7,3 +7,4 @@ pydantic-settings==2.5.2
 pydantic==2.9.2
 websockets==13.1
 aiosmtplib==3.0.2
+python-jose[cryptography]==3.3.0

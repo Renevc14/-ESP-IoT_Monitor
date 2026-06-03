@@ -2,11 +2,13 @@ import uuid
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.config import settings
 from app.models.alert import Alert
 from app.ws_manager import manager
 
@@ -93,12 +95,25 @@ async def resolve_alert(
         return {"id": str(alert.id), "status": alert.status}
 
 
+def _valid_access_token(token: str | None) -> bool:
+    if not token or not settings.jwt_secret_key:
+        return False
+    try:
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"]).get("type") == "access"
+    except JWTError:
+        return False
+
+
 @router.websocket("/ws/alerts")
-async def websocket_alerts(ws: WebSocket):
+async def websocket_alerts(ws: WebSocket, token: str | None = Query(default=None)):
+    # El navegador no puede enviar headers en WebSocket: el access token llega como
+    # query param y se valida antes de aceptar la conexión.
+    if not _valid_access_token(token):
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
     await manager.connect(ws)
     try:
         while True:
-            # Keep connection alive; client can send pings
-            await ws.receive_text()
+            await ws.receive_text()  # mantiene viva la conexión
     except WebSocketDisconnect:
         manager.disconnect(ws)

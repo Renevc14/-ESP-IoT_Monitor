@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
     exchange_name: str = "sensor_data_exchange"
     queue_name: str = "analytics_queue"
+    jwt_secret_key: str = ""
 
     class Config:
         env_file = ".env"

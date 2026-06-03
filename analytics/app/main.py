@@ -4,8 +4,9 @@ from typing import List, Optional
 import asyncio
 
 import strawberry
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from strawberry.fastapi import GraphQLRouter
 
@@ -55,13 +56,27 @@ class Query:
 schema = strawberry.Schema(query=Query, subscription=Subscription)
 
 
+def _valid_access_token(token: str | None) -> bool:
+    if not token or not settings.jwt_secret_key:
+        return False
+    try:
+        return jwt.decode(token, settings.jwt_secret_key, algorithms=["HS256"]).get("type") == "access"
+    except JWTError:
+        return False
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_factory = session_factory
 
-    async def get_context() -> dict:
+    async def get_context(request: Request = None, websocket: WebSocket = None) -> dict:
+        # En WebSocket (suscripciones) exigimos un access token válido por query param.
+        if websocket is not None:
+            if not _valid_access_token(websocket.query_params.get("token")):
+                await websocket.close(code=1008)
+                raise RuntimeError("unauthorized websocket")
         return {"session_factory": session_factory}
 
     graphql_app = GraphQLRouter(schema, context_getter=get_context)

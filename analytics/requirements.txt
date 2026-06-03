@@ -4,5 +4,6 @@ strawberry-graphql[fastapi]==0.261.1
 sqlalchemy[asyncio]==2.0.35
 asyncpg==0.29.0
 aio-pika==9.4.3
+python-jose[cryptography]==3.3.0
 pydantic-settings==2.5.2
 pydantic==2.9.2
