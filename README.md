@@ -137,22 +137,27 @@ MODE=demo docker compose --profile simulator up simulator
 #### Authentication
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
-| POST | `/auth/login` | Login → access token + refresh token + user profile | Public |
-| POST | `/auth/refresh` | Rotate refresh token | Refresh token |
+| POST | `/auth/login` | Login → access token (body) + refresh token en **cookie HttpOnly** + perfil | Public |
+| POST | `/auth/refresh` | Rota el refresh token (lee la cookie HttpOnly o el body) | Cookie/Refresh |
+| POST | `/auth/logout` | Borra la cookie de refresh | Public |
+| POST | `/auth/forgot-password` | Envía enlace de recuperación por email | Public |
+| POST | `/auth/reset-password` | Restablece la contraseña con el token del email | Token |
 | GET | `/users/me` | Current user profile | Any role |
 
-#### Users (admin)
+#### Users / Admin
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/users` | List users | admin |
 | POST | `/users` | Create user with role | admin |
 | PATCH | `/users/{id}` | Update role / active / name | admin |
+| GET | `/audit-logs` | Eventos de auditoría (OWASP A09) | admin |
+| GET | `/system/health` | Estado de salud de los 5 servicios | operator+ |
 
 #### Devices
 | Method | Endpoint | Description | Auth |
 |--------|----------|-------------|------|
 | GET | `/devices` | List all devices | operator+ |
-| POST | `/devices` | Register new device (token bcrypt-hashed) | admin |
+| POST | `/devices` | Registrar dispositivo; el token se autogenera y se devuelve **una sola vez** (HU-05) | admin |
 | GET | `/devices/{id}` | Device detail | operator+ |
 | PATCH | `/devices/{id}` | Update name, location, active status | admin |
 | DELETE | `/devices/{id}` | Delete device | admin |
@@ -199,6 +204,11 @@ type Query {
   alerts(deviceId: String, status: String, limit: Int): [AlertType!]!
   # agregación temporal con time_bucket() de TimescaleDB
   bucketedReadings(deviceId: String!, sensorType: String!, hours: Int, bucketMinutes: Int): [BucketedReadingType!]!
+}
+
+type Subscription {
+  # Streaming de lecturas en tiempo real vía WebSocket (graphql-ws)
+  readingAdded(deviceId: String, sensorType: String): SensorReadingType!
 }
 ```
 
@@ -249,11 +259,13 @@ Three simulated outdoor stations in Cochabamba, Bolivia (real weather from Open-
 | Control | Implementation |
 |---------|---------------|
 | A01 — Broken Access Control | RBAC via FastAPI `Depends` on every endpoint |
-| A02 — Cryptographic Failures | bcrypt (passlib) for passwords · JWT HS256 · TLS in production |
+| A02 — Cryptographic Failures | Credenciales/tokens **no se guardan en claro**: contraseñas con bcrypt, refresh tokens con SHA-256, tokens de dispositivo con bcrypt. TLS 1.3 en despliegue de producción (ver nota abajo). |
 | A03 — Injection | SQLAlchemy ORM — zero raw SQL string interpolation |
 | A05 — Security Misconfiguration | Restrictive CORS · per-IP rate limiting (Redis) · security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) |
-| A07 — Auth Failures | JWT rotation on every `/auth/refresh` · 15min access / 7day refresh |
-| A09 — Logging Failures | Login OK/fallido, refresh, accesos denegados (403) y CRUD registrados en `security.audit_logs` |
+| A07 — Auth Failures | Rotación de refresh en cada `/auth/refresh` · access 15min / refresh 7d · **refresh en cookie HttpOnly** |
+| A09 — Logging Failures | Login OK/fallido, refresh, accesos denegados (403) y CRUD registrados en `security.audit_logs` (consultables en `/audit-logs` y la vista **Logs**) |
+
+> **Nota TLS 1.3 / cifrado en reposo (A02, RNF-05):** en el entorno local de desarrollo el tráfico es HTTP (el documento, Cap. 5.2.4, acota OWASP a desarrollo). Las credenciales y tokens **ya se almacenan cifrados/hasheados** (no hay datos sensibles en claro). Para producción se documenta TLS 1.3 (reverse proxy) y cifrado de disco/columna; `COOKIE_SECURE=true` activa la cookie segura sobre HTTPS.
 
 ---
 
@@ -340,7 +352,16 @@ cd analytics && pip install -r requirements.txt pytest pytest-asyncio pytest-cov
 pip install -r tests/requirements.txt && pytest tests/ -v
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) ejecuta en cada push/PR: (1) las pruebas unitarias por servicio con cobertura y (2) las pruebas de integración levantando el stack completo con Docker Compose y esperando los healthchecks.
+Cada servicio aplica un **umbral de cobertura ≥80%** (`.coveragerc fail_under=80`) sobre su lógica de negocio.
+
+```bash
+# Prueba de carga del servicio de ingesta (RNF-01)
+pip install httpx && python tests/load/load_test.py
+```
+
+GitHub Actions ejecuta en cada push/PR (`.github/workflows/ci.yml`): (1) pruebas unitarias por servicio con cobertura (gate 80%) y (2) pruebas de integración levantando el stack completo con Docker Compose. Adicionalmente, `.github/workflows/security-scan.yml` corre un **OWASP ZAP Baseline** (RNF-04) de forma manual/semanal contra el gateway.
+
+> **Nota de rendimiento (RNF-01):** la herramienta de carga se incluye en `tests/load/`. El throughput medido en un host local con Docker Desktop (Windows) está limitado por el entorno; el objetivo de ≥1000 evt/s aplica a un despliegue escalado (Linux + múltiples instalaciones de consumidores, ver Cap. 14), que la arquitectura fanout + competing consumers soporta sin cambios en el productor.
 
 ---
 
