@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, alerts, analytics]
+        service: [gateway, identity, alerts, analytics]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

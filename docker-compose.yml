@@ -1,17 +1,15 @@
 services:
-  # ─── Infrastructure ───────────────────────────────────────────
-  postgres-timescale:
-    image: timescale/timescaledb:latest-pg16@sha256:87f39af0a38cb42e4add367d9dfad2087a53fe5c9b24b5bc0dc66bd204b0665f
-    container_name: iot-postgres
+  # ─── Bases de datos (una por servicio) ────────────────────────
+  identity-db:
+    image: postgres:16-alpine
+    container_name: iot-identity-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-iot}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iot}
       POSTGRES_DB: ${POSTGRES_DB:-iot}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
-      - pg-data:/var/lib/postgresql/data
+      - ./db/identity:/docker-entrypoint-initdb.d:ro
+      - identity-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iot} -d ${POSTGRES_DB:-iot}"]
       interval: 10s
@@ -20,6 +18,61 @@ services:
     restart: unless-stopped
     networks: [iot_network]
 
+  registry-db:
+    image: postgres:16-alpine
+    container_name: iot-registry-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-iot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iot}
+      POSTGRES_DB: ${POSTGRES_DB:-iot}
+    volumes:
+      - ./db/registry:/docker-entrypoint-initdb.d:ro
+      - registry-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iot} -d ${POSTGRES_DB:-iot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [iot_network]
+
+  timeseries-db:
+    image: timescale/timescaledb:latest-pg16@sha256:87f39af0a38cb42e4add367d9dfad2087a53fe5c9b24b5bc0dc66bd204b0665f
+    container_name: iot-timeseries-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-iot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iot}
+      POSTGRES_DB: ${POSTGRES_DB:-iot}
+    volumes:
+      - ./db/timeseries:/docker-entrypoint-initdb.d:ro
+      - timeseries-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iot} -d ${POSTGRES_DB:-iot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [iot_network]
+
+  alerts-db:
+    image: postgres:16-alpine
+    container_name: iot-alerts-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-iot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-iot}
+      POSTGRES_DB: ${POSTGRES_DB:-iot}
+    volumes:
+      - ./db/alerts:/docker-entrypoint-initdb.d:ro
+      - alerts-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-iot} -d ${POSTGRES_DB:-iot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    networks: [iot_network]
+
+  # ─── Infraestructura ──────────────────────────────────────────
   rabbitmq:
     image: rabbitmq:3.13-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
     container_name: iot-rabbitmq
@@ -32,9 +85,6 @@ services:
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      # check_port_connectivity waits until the AMQP listener actually accepts
-      # client connections (plain "ping" reports healthy too early, causing
-      # consumers to crash on first boot with "Connection refused").
       test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
       interval: 10s
       timeout: 10s
@@ -59,7 +109,6 @@ services:
     restart: unless-stopped
     networks: [iot_network]
 
-  # MailHog: SMTP de demostración para notificaciones de alertas (UI en :8025)
   mailhog:
     image: mailhog/mailhog:latest@sha256:8d76a3d4ffa32a3661311944007a415332c4bb855657f4f6c57996405c009bea
     container_name: iot-mailhog
@@ -69,7 +118,60 @@ services:
     restart: unless-stopped
     networks: [iot_network]
 
-  # ─── Backend Microservices ────────────────────────────────────
+  # ─── Microservicios ───────────────────────────────────────────
+  identity:
+    build:
+      context: ./identity
+      dockerfile: Dockerfile
+    container_name: iot-identity
+    ports:
+      - "8005:8005"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@identity-db:5432/${POSTGRES_DB:-iot}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 15
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      SMTP_HOST: ${SMTP_HOST:-mailhog}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@iot.local}
+    depends_on:
+      identity-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [iot_network]
+
+  registry:
+    build:
+      context: ./registry
+      dockerfile: Dockerfile
+    container_name: iot-registry
+    ports:
+      - "8006:8006"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@registry-db:5432/${POSTGRES_DB:-iot}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      JWT_ALGORITHM: HS256
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+    depends_on:
+      registry-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks: [iot_network]
+
   gateway:
     build:
       context: ./gateway
@@ -78,26 +180,18 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
-      REDIS_URL: redis://redis:6379
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
       JWT_ALGORITHM: HS256
-      ACCESS_TOKEN_EXPIRE_MINUTES: 15
-      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      REDIS_URL: redis://redis:6379
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
-      ANALYTICS_SERVICE_URL: http://analytics:8004
-      ALERTS_URL: http://alerts:8003
-      INGESTION_URL: http://ingestion:8001
-      PROCESSING_URL: http://processing:8002
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
-      COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      SMTP_HOST: ${SMTP_HOST:-mailhog}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_FROM: ${SMTP_FROM:-no-reply@iot.local}
     depends_on:
-      postgres-timescale:
-        condition: service_healthy
       redis:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+      registry:
+        condition: service_healthy
+      alerts:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -138,14 +232,14 @@ services:
     ports:
       - "8002:8002"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@timeseries-db:5432/${POSTGRES_DB:-iot}
       REDIS_URL: redis://redis:6379
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
       EXCHANGE_NAME: sensor_data_exchange
       QUEUE_NAME: processing_queue
       REDIS_CACHE_TTL: 300
     depends_on:
-      postgres-timescale:
+      timeseries-db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -167,7 +261,7 @@ services:
     ports:
       - "8003:8003"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@alerts-db:5432/${POSTGRES_DB:-iot}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
       EXCHANGE_NAME: sensor_data_exchange
       QUEUE_NAME: alerts_queue
@@ -177,7 +271,7 @@ services:
       SMTP_FROM: ${SMTP_FROM:-alerts@iot.local}
       ALERT_EMAILS: ${ALERT_EMAILS:-}
     depends_on:
-      postgres-timescale:
+      alerts-db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -199,13 +293,15 @@ services:
     ports:
       - "8004:8004"
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://iot:iot@postgres-timescale:5432/iot}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@timeseries-db:5432/${POSTGRES_DB:-iot}
       RABBITMQ_URL: amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASSWORD:-guest}@rabbitmq:5672/
       EXCHANGE_NAME: sensor_data_exchange
       QUEUE_NAME: analytics_queue
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      REGISTRY_URL: http://registry:8006
+      ALERTS_URL: http://alerts:8003
     depends_on:
-      postgres-timescale:
+      timeseries-db:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
@@ -217,7 +313,7 @@ services:
     restart: unless-stopped
     networks: [iot_network]
 
-  # ─── Simulator ───────────────────────────────────────────────
+  # ─── Simulador ────────────────────────────────────────────────
   simulator:
     build:
       context: ./simulator
@@ -240,7 +336,7 @@ services:
     restart: "no"
     networks: [iot_network]
 
-  # ─── Frontend ────────────────────────────────────────────────
+  # ─── Frontend ─────────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
@@ -258,12 +354,14 @@ services:
     restart: unless-stopped
     networks: [iot_network]
 
-# ─── Networks & Volumes ──────────────────────────────────────────
 networks:
   iot_network:
     driver: bridge
 
 volumes:
-  pg-data:
+  identity-data:
+  registry-data:
+  timeseries-data:
+  alerts-data:
   rabbitmq-data:
   redis-data:
