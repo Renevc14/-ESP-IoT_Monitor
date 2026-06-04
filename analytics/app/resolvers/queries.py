@@ -170,6 +170,39 @@ async def resolve_alert_summary(info: strawberry.types.Info) -> AlertSummaryType
     return AlertSummaryType(total=d["total"], active=d["active"], critical=d["critical"], warning=d["warning"])
 
 
+async def resolve_hourly_readings(
+    info: strawberry.types.Info,
+    device_id: str,
+    sensor_type: str,
+    days: int = 7,
+) -> List[BucketedReadingType]:
+    """Tendencias horarias leídas del continuous aggregate de TimescaleDB.
+
+    A diferencia de bucketed_readings (recalcula time_bucket sobre la tabla cruda),
+    esto consulta la vista materializada incremental: O(filas del periodo agregado).
+    """
+    session_factory = info.context["session_factory"]
+    async with session_factory() as session:
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        result = await session.execute(
+            text("""
+                SELECT bucket, avg_value::float, min_value::float, max_value::float, reading_count
+                FROM iot.sensor_readings_hourly
+                WHERE device_id = :device_id
+                  AND sensor_type = :sensor_type
+                  AND bucket >= :since
+                ORDER BY bucket ASC
+            """),
+            {"device_id": device_id, "sensor_type": sensor_type, "since": since},
+        )
+        return [
+            BucketedReadingType(
+                bucket=r[0], avg_value=r[1], min_value=r[2], max_value=r[3], reading_count=r[4]
+            )
+            for r in result.fetchall()
+        ]
+
+
 async def resolve_bucketed_readings(
     info: strawberry.types.Info,
     device_id: str,

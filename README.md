@@ -48,7 +48,7 @@ Cada servicio es **dueño de su propia base de datos** (Database per Service); n
 | `analytics` | 8004 | GraphQL (Strawberry) + suscripciones + export; lee **timeseries-db** + composición API |
 | `frontend` | 80 | Dashboard React |
 | `identity-db` / `registry-db` / `alerts-db` | — | PostgreSQL 16 (un esquema por contexto) |
-| `timeseries-db` | — | PostgreSQL 16 + TimescaleDB (hypertable de lecturas) |
+| `timeseries-db` | — | PostgreSQL 16 + TimescaleDB (hypertable + continuous aggregate horario, compresión y retención) |
 | `rabbitmq` | 5672/15672 | Broker — fanout `sensor_data_exchange` |
 | `redis` | 6379 | Caché (última lectura) + rate limiting |
 | `mailhog` | 1025/8025 | SMTP de demostración (UI en :8025) |

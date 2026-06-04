@@ -21,6 +21,7 @@ from app.resolvers.queries import (
     resolve_bucketed_readings,
     resolve_device_summary,
     resolve_devices,
+    resolve_hourly_readings,
     resolve_readings,
 )
 from app.resolvers.subscriptions import Subscription
@@ -52,6 +53,10 @@ class Query:
     bucketed_readings: List[BucketedReadingType] = strawberry.field(
         resolver=resolve_bucketed_readings,
         description="Time-bucketed aggregate readings (avg/min/max per bucket) for charting",
+    )
+    hourly_readings: List[BucketedReadingType] = strawberry.field(
+        resolver=resolve_hourly_readings,
+        description="Hourly trends from the TimescaleDB continuous aggregate (fast historical queries)",
     )
 
 
