@@ -25,17 +25,23 @@ class FakeScalars:
 
 
 class FakeResult:
-    def __init__(self, items):
-        self._items = items
+    def __init__(self, items=None, scalar=None):
+        self._items = items or []
+        self._scalar = scalar
 
     def scalars(self):
         return FakeScalars(self._items)
 
+    def scalar_one_or_none(self):
+        return self._scalar
+
 
 class FakeSession:
-    def __init__(self, rules):
+    def __init__(self, rules, open_alert=None):
         self.rules = rules
+        self.open_alert = open_alert
         self.added = []
+        self._calls = 0
 
     async def __aenter__(self):
         return self
@@ -44,7 +50,11 @@ class FakeSession:
         return False
 
     async def execute(self, *a, **k):
-        return FakeResult(self.rules)
+        # 1ª llamada: reglas activas. Siguientes: chequeo de alerta abierta (dedupe).
+        self._calls += 1
+        if self._calls == 1:
+            return FakeResult(items=self.rules)
+        return FakeResult(scalar=self.open_alert)
 
     def add(self, obj):
         self.added.append(obj)
@@ -109,6 +119,19 @@ async def test_evaluate_no_alert_below_threshold(monkeypatch):
     await ev.evaluate(
         {"device_id": str(rule.device_id), "sensor_type": "temperature", "value": 21.0},
         _factory([rule]),
+    )
+    assert broadcasts == []
+    assert emails == []
+
+
+@pytest.mark.asyncio
+async def test_evaluate_dedupes_when_alert_open(monkeypatch):
+    rule = _rule(operator="gt", threshold=40.0)
+    broadcasts, emails = _patch(monkeypatch)
+    # Ya hay una alerta abierta para la regla: no debe generarse otra ni correo.
+    await ev.evaluate(
+        {"device_id": str(rule.device_id), "sensor_type": "temperature", "value": 45.5},
+        lambda: FakeSession([rule], open_alert=uuid.uuid4()),
     )
     assert broadcasts == []
     assert emails == []
