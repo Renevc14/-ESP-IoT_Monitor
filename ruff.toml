@@ -1,0 +1,6 @@
+# Linter de Python (pyflakes): detecta imports/variables sin usar y nombres no definidos.
+line-length = 120
+exclude = ["frontend", ".venv", "venv"]
+
+[lint]
+select = ["F"]

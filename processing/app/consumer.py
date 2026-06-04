@@ -1,11 +1,11 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 
 import aio_pika
 from aio_pika import ExchangeType
 from redis.asyncio import Redis
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import settings
 from app.models.reading import SensorReading
