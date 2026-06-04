@@ -1,4 +1,5 @@
 import time
+import uuid
 
 from fastapi import HTTPException, Request, status
 from redis.asyncio import Redis
@@ -11,11 +12,12 @@ class RateLimiter:
         self.window = window
 
     async def check(self, key: str) -> None:
-        now = int(time.time())
+        now = time.time()
         window_start = now - self.window
         pipe = self.redis.pipeline()
         pipe.zremrangebyscore(key, 0, window_start)
-        pipe.zadd(key, {str(now): now})
+        # Miembro único por petición: dos peticiones en el mismo segundo no colisionan.
+        pipe.zadd(key, {uuid.uuid4().hex: now})
         pipe.zcard(key)
         pipe.expire(key, self.window)
         results = await pipe.execute()

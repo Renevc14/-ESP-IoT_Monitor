@@ -14,7 +14,10 @@ from app.proxy import router as proxy_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    # Cliente HTTP compartido para el proxy (keep-alive entre peticiones).
+    app.state.http = httpx.AsyncClient(timeout=30)
     yield
+    await app.state.http.aclose()
     await app.state.redis.aclose()
 
 
@@ -55,14 +58,14 @@ async def health():
 @app.get("/system/health", tags=["System"])
 async def system_health():
     out = [{"service": "gateway", "status": "healthy"}]
-    async with httpx.AsyncClient(timeout=4.0) as client:
-        for name, url in _SERVICES.items():
-            try:
-                resp = await client.get(f"{url}/health")
-                resp.raise_for_status()
-                out.append({"service": name, "status": "healthy"})
-            except Exception:
-                out.append({"service": name, "status": "down"})
+    client: httpx.AsyncClient = app.state.http
+    for name, url in _SERVICES.items():
+        try:
+            resp = await client.get(f"{url}/health", timeout=4.0)
+            resp.raise_for_status()
+            out.append({"service": name, "status": "healthy"})
+        except Exception:
+            out.append({"service": name, "status": "down"})
     return out
 
 
