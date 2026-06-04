@@ -13,6 +13,22 @@ logger = logging.getLogger(__name__)
 _connection: aio_pika.abc.AbstractConnection | None = None
 
 
+async def handle_message(message, session_factory: async_sessionmaker) -> None:
+    """Procesa un mensaje con política de reintento + dead-letter.
+
+    Éxito → ack. Primer fallo → nack con requeue (reintento de transitorios).
+    Fallo en la reentrega → nack sin requeue (va a la DLQ vía x-dead-letter-exchange).
+    """
+    try:
+        body = json.loads(message.body.decode())
+        await evaluate(body, session_factory)
+        await message.ack()
+    except Exception as exc:
+        requeue = not message.redelivered
+        logger.error("Failed to evaluate message (requeue=%s): %s", requeue, exc)
+        await message.nack(requeue=requeue)
+
+
 async def start_consuming(session_factory: async_sessionmaker) -> None:
     global _connection
     _connection = await aio_pika.connect_robust(settings.rabbitmq_url)
@@ -40,15 +56,7 @@ async def start_consuming(session_factory: async_sessionmaker) -> None:
 
     async with queue.iterator() as q:
         async for message in q:
-            try:
-                body = json.loads(message.body.decode())
-                await evaluate(body, session_factory)
-                await message.ack()
-            except Exception as exc:
-                # Primer fallo: reintentar (transitorio). Segundo: a la DLQ (veneno).
-                requeue = not message.redelivered
-                logger.error("Failed to evaluate message (requeue=%s): %s", requeue, exc)
-                await message.nack(requeue=requeue)
+            await handle_message(message, session_factory)
 
 
 async def stop_consuming() -> None:
