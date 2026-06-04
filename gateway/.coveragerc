@@ -5,6 +5,7 @@ omit =
     app/main.py
     app/config.py
     app/proxy.py
+    app/observability.py
     app/__init__.py
 
 [report]

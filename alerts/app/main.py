@@ -1,5 +1,4 @@
 import asyncio
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,10 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app import consumer
 from app.config import settings
+from app.observability import setup_observability
 from app.routers.alerts import router
 from app.routers.rules import router as rules_router
-
-logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
@@ -47,6 +45,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+setup_observability(app, "alerts")
 
 app.include_router(router)
 app.include_router(rules_router)

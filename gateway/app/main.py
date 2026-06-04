@@ -8,6 +8,7 @@ from redis.asyncio import Redis
 from app.config import settings
 from app.middleware.rate_limiter import rate_limit_middleware
 from app.middleware.security_headers import security_headers_middleware
+from app.observability import setup_observability
 from app.proxy import router as proxy_router
 
 
@@ -39,6 +40,9 @@ app.add_middleware(
 )
 app.middleware("http")(security_headers_middleware)
 app.middleware("http")(rate_limit_middleware)
+
+# Métricas Prometheus (/metrics) y logs JSON — antes del proxy catch-all
+setup_observability(app, "gateway")
 
 _SERVICES = {
     "identity": settings.identity_url,

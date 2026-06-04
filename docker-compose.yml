@@ -147,6 +147,38 @@ services:
     deploy: *deploy-small
     networks: [iot_network]
 
+  # ─── Observabilidad (perfil opcional: docker compose --profile observability up) ─
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: iot-prometheus
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    profiles: [observability]
+    restart: unless-stopped
+    deploy: *deploy-small
+    networks: [iot_network]
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: iot-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    profiles: [observability]
+    restart: unless-stopped
+    deploy: *deploy-small
+    networks: [iot_network]
+
   # ─── Microservicios ───────────────────────────────────────────
   # Solo el gateway (8000), ingestion (8001, edge de datos de dispositivos),
   # analytics (8004) y alerts (8003) se publican al host. identity, registry y
@@ -401,3 +433,4 @@ volumes:
   alerts-data:
   rabbitmq-data:
   redis-data:
+  grafana-data:

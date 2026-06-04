@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,9 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import publisher
 from app.config import settings
+from app.observability import setup_observability
 from app.routers import ingest
-
-logging.basicConfig(level=logging.INFO)
 
 
 @asynccontextmanager
@@ -31,6 +29,8 @@ app.add_middleware(
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
+
+setup_observability(app, "ingestion")
 
 app.include_router(ingest.router)
 
