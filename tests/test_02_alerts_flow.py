@@ -74,3 +74,12 @@ async def test_alert_generated_and_acknowledged(admin_token, operator_token):
         )
     assert ack_resp.status_code == 200, f"Acknowledge failed: {ack_resp.text}"
     assert ack_resp.json()["status"] == "acknowledged"
+
+    # 5. Resolve and verify the final state transition
+    async with httpx.AsyncClient(base_url=GATEWAY_URL) as client:
+        resolve_resp = await client.patch(
+            f"/alerts/{alert['id']}/resolve",
+            headers={"Authorization": f"Bearer {admin_token}"},
+        )
+    assert resolve_resp.status_code == 200, f"Resolve failed: {resolve_resp.text}"
+    assert resolve_resp.json()["status"] == "resolved"
