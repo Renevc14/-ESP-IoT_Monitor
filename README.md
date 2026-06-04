@@ -52,6 +52,8 @@ Cada servicio es **dueño de su propia base de datos** (Database per Service); n
 | `rabbitmq` | 5672/15672 | Broker — fanout `sensor_data_exchange` |
 | `redis` | 6379 | Caché (última lectura) + rate limiting |
 | `mailhog` | 1025/8025 | SMTP de demostración (UI en :8025) |
+| `prometheus` | 9090 | Métricas (perfil `observability`) — scrapea `/metrics` de cada servicio |
+| `grafana` | 3000 | Tableros sobre Prometheus (perfil `observability`, admin/admin) |
 
 **Bases de datos:** una instancia por servicio (las migraciones de cada una en `db/<servicio>/`, auto-aplicadas al primer arranque). Las BDs no exponen puertos al host (solo red interna).
 

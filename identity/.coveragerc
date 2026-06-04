@@ -4,6 +4,7 @@
 omit =
     app/main.py
     app/config.py
+    app/observability.py
     app/db/*
     app/models/*
     app/schemas/*

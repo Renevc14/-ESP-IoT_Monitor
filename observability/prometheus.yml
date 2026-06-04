@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: iot-services
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - gateway:8000
+          - identity:8005
+          - registry:8006
+          - ingestion:8001
+          - processing:8002
+          - alerts:8003
+          - analytics:8004

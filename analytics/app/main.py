@@ -14,6 +14,7 @@ from strawberry.fastapi import GraphQLRouter
 
 from app import consumer
 from app.config import settings
+from app.observability import setup_observability
 from app.routers.export import router as export_router
 from app.resolvers.queries import (
     resolve_alert_summary,
@@ -138,6 +139,8 @@ app.add_middleware(
 )
 
 app.include_router(export_router)
+
+setup_observability(app, "analytics")
 
 
 @app.get("/health", tags=["Health"])

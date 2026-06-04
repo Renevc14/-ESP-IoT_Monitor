@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.observability import setup_observability
 from app.routers import audit, auth, users
 
 app = FastAPI(
@@ -19,6 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+setup_observability(app, "identity")
 
 app.include_router(auth.router)
 app.include_router(users.router)

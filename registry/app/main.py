@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.observability import setup_observability
 from app.routers import devices
 
 app = FastAPI(
@@ -19,6 +20,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+setup_observability(app, "registry")
 
 app.include_router(devices.router)
 
