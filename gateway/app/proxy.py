@@ -57,14 +57,14 @@ async def proxy(full_path: str, request: Request):
     fwd_headers = {k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP}
     params = [(k, v) for k, v in request.query_params.multi_items()]
 
-    async with httpx.AsyncClient(timeout=30) as client:
-        try:
-            upstream = await client.request(
-                request.method, f"{base}{path}",
-                params=params, content=body, headers=fwd_headers, cookies=request.cookies,
-            )
-        except httpx.HTTPError as exc:
-            raise HTTPException(status_code=502, detail=f"Upstream unavailable: {exc}")
+    client: httpx.AsyncClient = request.app.state.http
+    try:
+        upstream = await client.request(
+            request.method, f"{base}{path}",
+            params=params, content=body, headers=fwd_headers, cookies=request.cookies,
+        )
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Upstream unavailable: {exc}")
 
     resp_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP}
     return Response(content=upstream.content, status_code=upstream.status_code, headers=resp_headers)

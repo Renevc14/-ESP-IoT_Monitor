@@ -1,3 +1,25 @@
+# Topes de memoria por tipo de servicio (aplicados por `docker compose` como límites).
+x-deploy-app: &deploy-app
+  resources:
+    limits:
+      memory: 384M
+x-deploy-db: &deploy-db
+  resources:
+    limits:
+      memory: 512M
+x-deploy-ts: &deploy-ts
+  resources:
+    limits:
+      memory: 1024M
+x-deploy-mq: &deploy-mq
+  resources:
+    limits:
+      memory: 768M
+x-deploy-small: &deploy-small
+  resources:
+    limits:
+      memory: 256M
+
 services:
   # ─── Bases de datos (una por servicio) ────────────────────────
   identity-db:
@@ -16,6 +38,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy: *deploy-db
     networks: [iot_network]
 
   registry-db:
@@ -34,6 +57,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy: *deploy-db
     networks: [iot_network]
 
   timeseries-db:
@@ -52,6 +76,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy: *deploy-ts
     networks: [iot_network]
 
   alerts-db:
@@ -70,6 +95,7 @@ services:
       timeout: 5s
       retries: 10
     restart: unless-stopped
+    deploy: *deploy-db
     networks: [iot_network]
 
   # ─── Infraestructura ──────────────────────────────────────────
@@ -91,6 +117,7 @@ services:
       retries: 10
       start_period: 20s
     restart: unless-stopped
+    deploy: *deploy-mq
     networks: [iot_network]
 
   redis:
@@ -107,6 +134,7 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
+    deploy: *deploy-small
     networks: [iot_network]
 
   mailhog:
@@ -116,16 +144,18 @@ services:
       - "1025:1025"
       - "8025:8025"
     restart: unless-stopped
+    deploy: *deploy-small
     networks: [iot_network]
 
   # ─── Microservicios ───────────────────────────────────────────
+  # Solo el gateway (8000), ingestion (8001, edge de datos de dispositivos),
+  # analytics (8004) y alerts (8003) se publican al host. identity, registry y
+  # processing son internos: se alcanzan únicamente por la red iot_network.
   identity:
     build:
       context: ./identity
       dockerfile: Dockerfile
     container_name: iot-identity
-    ports:
-      - "8005:8005"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@identity-db:5432/${POSTGRES_DB:-iot}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
@@ -147,6 +177,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   registry:
@@ -154,8 +185,6 @@ services:
       context: ./registry
       dockerfile: Dockerfile
     container_name: iot-registry
-    ports:
-      - "8006:8006"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@registry-db:5432/${POSTGRES_DB:-iot}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
@@ -170,6 +199,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   gateway:
@@ -199,6 +229,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   ingestion:
@@ -222,6 +253,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   processing:
@@ -229,8 +261,6 @@ services:
       context: ./processing
       dockerfile: Dockerfile
     container_name: iot-processing
-    ports:
-      - "8002:8002"
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-iot}:${POSTGRES_PASSWORD:-iot}@timeseries-db:5432/${POSTGRES_DB:-iot}
       REDIS_URL: redis://redis:6379
@@ -251,6 +281,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   alerts:
@@ -283,6 +314,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   analytics:
@@ -298,6 +330,7 @@ services:
       EXCHANGE_NAME: sensor_data_exchange
       QUEUE_NAME: analytics_queue
       JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
       REGISTRY_URL: http://registry:8006
       ALERTS_URL: http://alerts:8003
     depends_on:
@@ -311,6 +344,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy: *deploy-app
     networks: [iot_network]
 
   # ─── Simulador ────────────────────────────────────────────────
@@ -334,6 +368,7 @@ services:
     profiles:
       - simulator
     restart: "no"
+    deploy: *deploy-small
     networks: [iot_network]
 
   # ─── Frontend ─────────────────────────────────────────────────
@@ -352,6 +387,7 @@ services:
       gateway:
         condition: service_healthy
     restart: unless-stopped
+    deploy: *deploy-small
     networks: [iot_network]
 
 networks:

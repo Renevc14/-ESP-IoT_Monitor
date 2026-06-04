@@ -8,11 +8,25 @@ import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy import text
 
+from app.config import settings
+
 router = APIRouter(prefix="/export", tags=["Export"])
+
+_bearer = HTTPBearer()
+
+
+def require_token(credentials: HTTPAuthorizationCredentials = Depends(_bearer)) -> None:
+    try:
+        if jwt.decode(credentials.credentials, settings.jwt_secret_key, algorithms=["HS256"]).get("type") != "access":
+            raise JWTError()
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
 
 _COLUMNS = ["id", "device_id", "sensor_type", "value", "unit", "recorded_at"]
 
@@ -63,6 +77,7 @@ async def export_readings_csv(
     sensor_type: Optional[str] = Query(None),
     hours: Optional[int] = Query(None),
     limit: int = Query(10000, le=100000),
+    _: None = Depends(require_token),
 ):
     rows = await _fetch_rows(request, device_id, sensor_type, hours, limit)
 
@@ -92,6 +107,7 @@ async def export_readings_json(
     sensor_type: Optional[str] = Query(None),
     hours: Optional[int] = Query(None),
     limit: int = Query(10000, le=100000),
+    _: None = Depends(require_token),
 ):
     rows = await _fetch_rows(request, device_id, sensor_type, hours, limit)
     return JSONResponse(

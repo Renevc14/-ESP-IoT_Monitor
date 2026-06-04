@@ -81,16 +81,27 @@ export default function Analytics() {
     value: Number(r[agg]),
   }))
 
-  function exportUrl(fmt: 'csv' | 'json') {
+  async function downloadExport(fmt: 'csv' | 'json') {
     const params = new URLSearchParams({ device_id: deviceId, sensor_type: sensorType, hours: String(hours) })
-    return `${ANALYTICS_URL}/export/readings.${fmt}?${params.toString()}`
+    const token = sessionStorage.getItem('access_token')
+    const res = await fetch(`${ANALYTICS_URL}/export/readings.${fmt}?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) return
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `readings.${fmt}`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
     <div>
       <PageHeader title="Analytics" subtitle="Exploración de métricas y exportación de datos">
-        <a href={exportUrl('csv')} className={buttonClasses('secondary', 'sm')}><Download size={14} /> CSV</a>
-        <a href={exportUrl('json')} className={buttonClasses('secondary', 'sm')}><Download size={14} /> JSON</a>
+        <button onClick={() => downloadExport('csv')} className={buttonClasses('secondary', 'sm')}><Download size={14} /> CSV</button>
+        <button onClick={() => downloadExport('json')} className={buttonClasses('secondary', 'sm')}><Download size={14} /> JSON</button>
       </PageHeader>
 
       <div className="flex flex-wrap items-center gap-2 mb-5">

@@ -22,19 +22,33 @@ async def start_consuming(session_factory: async_sessionmaker) -> None:
     exchange = await channel.declare_exchange(
         settings.exchange_name, ExchangeType.FANOUT, durable=True,
     )
-    queue = await channel.declare_queue(settings.queue_name, durable=True)
+
+    # Dead-letter queue: evita perder o reencolar en bucle los mensajes que fallan.
+    dlx_name = f"{settings.queue_name}.dlx"
+    dlx = await channel.declare_exchange(dlx_name, ExchangeType.FANOUT, durable=True)
+    dlq = await channel.declare_queue(f"{settings.queue_name}.dlq", durable=True)
+    await dlq.bind(dlx)
+
+    queue = await channel.declare_queue(
+        settings.queue_name,
+        durable=True,
+        arguments={"x-dead-letter-exchange": dlx_name},
+    )
     await queue.bind(exchange)
 
     logger.info("Alerts consumer started — queue: %s", settings.queue_name)
 
     async with queue.iterator() as q:
         async for message in q:
-            async with message.process():
-                try:
-                    body = json.loads(message.body.decode())
-                    await evaluate(body, session_factory)
-                except Exception as exc:
-                    logger.error("Failed to evaluate message: %s", exc)
+            try:
+                body = json.loads(message.body.decode())
+                await evaluate(body, session_factory)
+                await message.ack()
+            except Exception as exc:
+                # Primer fallo: reintentar (transitorio). Segundo: a la DLQ (veneno).
+                requeue = not message.redelivered
+                logger.error("Failed to evaluate message (requeue=%s): %s", requeue, exc)
+                await message.nack(requeue=requeue)
 
 
 async def stop_consuming() -> None:

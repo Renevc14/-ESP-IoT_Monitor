@@ -57,19 +57,37 @@ async def start_consuming(session_factory: async_sessionmaker, redis: Redis) -> 
         ExchangeType.FANOUT,
         durable=True,
     )
-    queue = await channel.declare_queue(settings.queue_name, durable=True)
+
+    # Dead-letter queue: los mensajes que fallan tras un reintento se desvían aquí
+    # en vez de perderse (datos sin persistir) o reencolarse en bucle.
+    dlx_name = f"{settings.queue_name}.dlx"
+    dlx = await channel.declare_exchange(dlx_name, ExchangeType.FANOUT, durable=True)
+    dlq = await channel.declare_queue(f"{settings.queue_name}.dlq", durable=True)
+    await dlq.bind(dlx)
+
+    queue = await channel.declare_queue(
+        settings.queue_name,
+        durable=True,
+        arguments={"x-dead-letter-exchange": dlx_name},
+    )
     await queue.bind(exchange)
 
     logger.info("Processing consumer started — queue: %s", settings.queue_name)
 
     async with queue.iterator() as q:
         async for message in q:
-            async with message.process():
-                try:
-                    body = json.loads(message.body.decode())
-                    await _persist_and_cache(body, session_factory, redis)
-                except Exception as exc:
-                    logger.error("Failed to process message: %s | body: %s", exc, message.body[:200])
+            try:
+                body = json.loads(message.body.decode())
+                await _persist_and_cache(body, session_factory, redis)
+                await message.ack()
+            except Exception as exc:
+                # Primer fallo: reintentar (transitorio). Segundo: a la DLQ (veneno).
+                requeue = not message.redelivered
+                logger.error(
+                    "Failed to process message (requeue=%s): %s | body: %s",
+                    requeue, exc, message.body[:200],
+                )
+                await message.nack(requeue=requeue)
 
 
 async def stop_consuming() -> None:

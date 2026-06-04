@@ -1,14 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-import httpx
 import strawberry
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 
 from app.types.schema import AlertSummaryType, AlertType, BucketedReadingType, DeviceSummaryType, DeviceType, SensorReadingType
+
+# Tope defensivo para el argumento `limit` (evita escaneos/serializaciones abusivas).
+MAX_LIMIT = 1000
 
 
 async def resolve_readings(
@@ -18,6 +19,7 @@ async def resolve_readings(
     limit: int = 100,
     hours: Optional[int] = None,
 ) -> List[SensorReadingType]:
+    limit = max(1, min(limit, MAX_LIMIT))
     session_factory = info.context["session_factory"]
     async with session_factory() as session:
         query = "SELECT id, device_id, sensor_type, value, unit, recorded_at FROM iot.sensor_readings"
@@ -112,10 +114,10 @@ async def resolve_devices(
     info: strawberry.types.Info,
     is_active: Optional[bool] = None,
 ) -> List[DeviceType]:
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{settings.registry_url}/devices", headers=_auth_headers(info))
-        resp.raise_for_status()
-        rows = resp.json()
+    client = info.context["http"]
+    resp = await client.get(f"{settings.registry_url}/devices", headers=_auth_headers(info))
+    resp.raise_for_status()
+    rows = resp.json()
     return [
         DeviceType(
             id=str(d["id"]),
@@ -136,13 +138,14 @@ async def resolve_alerts(
     status: Optional[str] = None,
     limit: int = 50,
 ) -> List[AlertType]:
+    limit = max(1, min(limit, MAX_LIMIT))
     params: dict = {"limit": limit}
     if status:
         params["status"] = status
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{settings.alerts_url}/alerts", params=params)
-        resp.raise_for_status()
-        rows = resp.json()
+    client = info.context["http"]
+    resp = await client.get(f"{settings.alerts_url}/alerts", params=params, headers=_auth_headers(info))
+    resp.raise_for_status()
+    rows = resp.json()
     out = []
     for a in rows:
         if device_id and str(a["device_id"]) != device_id:
@@ -160,10 +163,10 @@ async def resolve_alerts(
 
 
 async def resolve_alert_summary(info: strawberry.types.Info) -> AlertSummaryType:
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(f"{settings.alerts_url}/alerts/summary")
-        resp.raise_for_status()
-        d = resp.json()
+    client = info.context["http"]
+    resp = await client.get(f"{settings.alerts_url}/alerts/summary", headers=_auth_headers(info))
+    resp.raise_for_status()
+    d = resp.json()
     return AlertSummaryType(total=d["total"], active=d["active"], critical=d["critical"], warning=d["warning"])
 
 

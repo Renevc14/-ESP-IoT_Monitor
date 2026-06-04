@@ -38,11 +38,7 @@ class FakeSession:
         return self._result
 
 
-def _info(result=None):
-    return SimpleNamespace(context={"session_factory": lambda: FakeSession(result), "auth": None})
-
-
-# ── Fakes para httpx (composición de API) ───────────────────────────────────
+# ── Fakes para el cliente HTTP compartido (composición de API) ──────────────
 class FakeResp:
     def __init__(self, data):
         self._data = data
@@ -58,18 +54,14 @@ class FakeClient:
     def __init__(self, data):
         self._data = data
 
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
     async def get(self, *a, **k):
         return FakeResp(self._data)
 
 
-def _patch_httpx(monkeypatch, data):
-    monkeypatch.setattr(queries.httpx, "AsyncClient", lambda *a, **k: FakeClient(data))
+def _info(result=None, http=None):
+    return SimpleNamespace(
+        context={"session_factory": lambda: FakeSession(result), "auth": None, "http": http}
+    )
 
 
 NOW = datetime(2026, 1, 1, 12, 0, tzinfo=timezone.utc)
@@ -98,21 +90,21 @@ async def test_resolve_bucketed_readings():
 
 
 @pytest.mark.asyncio
-async def test_resolve_devices_composition(monkeypatch):
-    _patch_httpx(monkeypatch, [{"id": "d1", "name": "Sensor", "device_type": "multi_sensor", "location": "Lab", "is_active": True, "created_at": ISO}])
-    out = await queries.resolve_devices(_info(), is_active=True)
+async def test_resolve_devices_composition():
+    http = FakeClient([{"id": "d1", "name": "Sensor", "device_type": "multi_sensor", "location": "Lab", "is_active": True, "created_at": ISO}])
+    out = await queries.resolve_devices(_info(http=http), is_active=True)
     assert out[0].name == "Sensor" and out[0].device_type == "multi_sensor"
 
 
 @pytest.mark.asyncio
-async def test_resolve_alerts_composition(monkeypatch):
-    _patch_httpx(monkeypatch, [{"id": "a1", "device_id": "d1", "triggered_value": 45.5, "severity": "critical", "status": "active", "created_at": ISO}])
-    out = await queries.resolve_alerts(_info(), device_id="d1", status="active")
+async def test_resolve_alerts_composition():
+    http = FakeClient([{"id": "a1", "device_id": "d1", "triggered_value": 45.5, "severity": "critical", "status": "active", "created_at": ISO}])
+    out = await queries.resolve_alerts(_info(http=http), device_id="d1", status="active")
     assert out[0].severity == "critical"
 
 
 @pytest.mark.asyncio
-async def test_resolve_alert_summary_composition(monkeypatch):
-    _patch_httpx(monkeypatch, {"total": 5, "active": 2, "critical": 1, "warning": 1})
-    out = await queries.resolve_alert_summary(_info())
+async def test_resolve_alert_summary_composition():
+    http = FakeClient({"total": 5, "active": 2, "critical": 1, "warning": 1})
+    out = await queries.resolve_alert_summary(_info(http=http))
     assert out.total == 5 and out.active == 2
