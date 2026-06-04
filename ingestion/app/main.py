@@ -4,7 +4,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import publisher
-from app.config import settings
 from app.observability import setup_observability
 from app.routers import ingest
 

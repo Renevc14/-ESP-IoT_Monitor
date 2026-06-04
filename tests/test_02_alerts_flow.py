@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
-from conftest import ALERTS_URL, DEVICE_ID, GATEWAY_URL, INGESTION_URL, poll_until
+from conftest import DEVICE_ID, GATEWAY_URL, INGESTION_URL, poll_until
 
 SENSOR_TYPE = "temperature"
 # Seed has: temperature > 40.0 = critical for DEVICE_ID
