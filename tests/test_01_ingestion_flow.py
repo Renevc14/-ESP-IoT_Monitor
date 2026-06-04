@@ -52,6 +52,7 @@ async def test_reading_reaches_timescaledb(operator_token):
         data = graphql_query(
             READINGS_QUERY,
             {"deviceId": DEVICE_ID, "sensorType": SENSOR_TYPE, "limit": 50},
+            token=operator_token,
         )
         readings = data.get("data", {}).get("readings", [])
         return any(abs(float(r["value"]) - TEST_VALUE) < 0.01 for r in readings)
@@ -62,6 +63,7 @@ async def test_reading_reaches_timescaledb(operator_token):
     data = graphql_query(
         READINGS_QUERY,
         {"deviceId": DEVICE_ID, "sensorType": SENSOR_TYPE, "limit": 50},
+        token=operator_token,
     )
     readings = data["data"]["readings"]
     match = next(r for r in readings if abs(float(r["value"]) - TEST_VALUE) < 0.01)

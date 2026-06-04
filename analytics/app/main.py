@@ -3,11 +3,13 @@ from typing import List, Optional
 
 import asyncio
 
+import httpx
 import strawberry
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket, status
 from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from strawberry.extensions import QueryDepthLimiter
 from strawberry.fastapi import GraphQLRouter
 
 from app import consumer
@@ -53,7 +55,12 @@ class Query:
     )
 
 
-schema = strawberry.Schema(query=Query, subscription=Subscription)
+# Límite de profundidad: evita consultas anidadas abusivas (DoS por complejidad).
+schema = strawberry.Schema(
+    query=Query,
+    subscription=Subscription,
+    extensions=[QueryDepthLimiter(max_depth=12)],
+)
 
 
 def _valid_access_token(token: str | None) -> bool:
@@ -65,11 +72,20 @@ def _valid_access_token(token: str | None) -> bool:
         return False
 
 
+def _bearer_token(authorization: str | None) -> str | None:
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:]
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_factory = session_factory
+    # Cliente HTTP compartido para la composición de API (keep-alive entre peticiones).
+    http_client = httpx.AsyncClient(timeout=10)
+    app.state.http = http_client
 
     async def get_context(request: Request = None, websocket: WebSocket = None) -> dict:
         # En WebSocket (suscripciones) exigimos un access token válido por query param.
@@ -77,9 +93,12 @@ async def lifespan(app: FastAPI):
             if not _valid_access_token(websocket.query_params.get("token")):
                 await websocket.close(code=1008)
                 raise RuntimeError("unauthorized websocket")
-        # En HTTP reenviamos el Authorization para la composición de API (registry/alerts)
+            return {"session_factory": session_factory, "auth": None, "http": http_client}
+        # En HTTP exigimos un access token válido y lo reenviamos a la composición de API.
         auth = request.headers.get("authorization") if request is not None else None
-        return {"session_factory": session_factory, "auth": auth}
+        if not _valid_access_token(_bearer_token(auth)):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+        return {"session_factory": session_factory, "auth": auth, "http": http_client}
 
     graphql_app = GraphQLRouter(schema, context_getter=get_context)
     app.include_router(graphql_app, prefix="/graphql")
@@ -95,6 +114,7 @@ async def lifespan(app: FastAPI):
     except asyncio.CancelledError:
         pass
     await consumer.stop_consuming()
+    await http_client.aclose()
     await engine.dispose()
 
 
@@ -107,7 +127,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.allowed_origins.split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
 )

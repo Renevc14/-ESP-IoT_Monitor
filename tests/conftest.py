@@ -46,12 +46,13 @@ async def operator_token():
         return resp.json()["access_token"]
 
 
-def graphql_query(query: str, variables: dict | None = None) -> dict:
+def graphql_query(query: str, variables: dict | None = None, token: str | None = None) -> dict:
     """Synchronous GraphQL helper (used inside poll loops)."""
     payload: dict = {"query": query}
     if variables:
         payload["variables"] = variables
-    resp = httpx.post(f"{ANALYTICS_URL}/graphql", json=payload, timeout=10.0)
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    resp = httpx.post(f"{ANALYTICS_URL}/graphql", json=payload, headers=headers, timeout=10.0)
     resp.raise_for_status()
     return resp.json()
 

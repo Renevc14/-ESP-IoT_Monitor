@@ -3,17 +3,16 @@ import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.config import settings
+from app.dependencies import Principal, get_current_principal, require_operator
 from app.models.alert import Alert
 from app.ws_manager import manager
 
 logger = logging.getLogger(__name__)
-bearer = HTTPBearer(auto_error=False)
 
 router = APIRouter()
 
@@ -27,6 +26,7 @@ async def list_alerts(
     status: str | None = None,
     limit: int = 50,
     session_factory: async_sessionmaker = Depends(_get_session_factory),
+    _: Principal = Depends(get_current_principal),
 ):
     async with session_factory() as session:
         query = select(Alert).order_by(Alert.created_at.desc()).limit(limit)
@@ -50,7 +50,10 @@ async def list_alerts(
 
 
 @router.get("/alerts/summary", tags=["Alerts"])
-async def alerts_summary(session_factory: async_sessionmaker = Depends(_get_session_factory)):
+async def alerts_summary(
+    session_factory: async_sessionmaker = Depends(_get_session_factory),
+    _: Principal = Depends(get_current_principal),
+):
     from sqlalchemy import func
     async with session_factory() as session:
         result = await session.execute(
@@ -68,12 +71,9 @@ async def alerts_summary(session_factory: async_sessionmaker = Depends(_get_sess
 @router.patch("/alerts/{alert_id}/acknowledge", tags=["Alerts"])
 async def acknowledge_alert(
     alert_id: uuid.UUID,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    principal: Principal = Depends(require_operator),
     session_factory: async_sessionmaker = Depends(_get_session_factory),
 ):
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
-
     async with session_factory() as session:
         result = await session.execute(select(Alert).where(Alert.id == alert_id))
         alert = result.scalar_one_or_none()
@@ -84,6 +84,8 @@ async def acknowledge_alert(
 
         alert.status = "acknowledged"
         alert.acknowledged_at = datetime.now(timezone.utc)
+        if principal.id:
+            alert.acknowledged_by = uuid.UUID(principal.id)
         await session.commit()
         return {"id": str(alert.id), "status": alert.status}
 
@@ -91,12 +93,9 @@ async def acknowledge_alert(
 @router.patch("/alerts/{alert_id}/resolve", tags=["Alerts"])
 async def resolve_alert(
     alert_id: uuid.UUID,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer),
+    _: Principal = Depends(require_operator),
     session_factory: async_sessionmaker = Depends(_get_session_factory),
 ):
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bearer token required")
-
     async with session_factory() as session:
         result = await session.execute(select(Alert).where(Alert.id == alert_id))
         alert = result.scalar_one_or_none()

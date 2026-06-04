@@ -69,6 +69,7 @@ async def test_graphql_returns_history_and_statistics(operator_token):
         data = graphql_query(
             READINGS_QUERY,
             {"deviceId": DEVICE_ID, "sensorType": SENSOR_TYPE, "limit": 100},
+            token=operator_token,
         )
         assert "errors" not in data or not data["errors"], f"GraphQL error: {data}"
         readings = data["data"]["readings"]
@@ -81,6 +82,7 @@ async def test_graphql_returns_history_and_statistics(operator_token):
     data = graphql_query(
         READINGS_QUERY,
         {"deviceId": DEVICE_ID, "sensorType": SENSOR_TYPE, "limit": 100},
+        token=operator_token,
     )
     assert not data.get("errors"), f"GraphQL errors: {data.get('errors')}"
     readings = data["data"]["readings"]
@@ -94,6 +96,7 @@ async def test_graphql_returns_history_and_statistics(operator_token):
     summary_data = graphql_query(
         SUMMARY_QUERY,
         {"deviceId": DEVICE_ID, "hours": 1},
+        token=operator_token,
     )
     assert not summary_data.get("errors"), f"GraphQL errors: {summary_data.get('errors')}"
 
