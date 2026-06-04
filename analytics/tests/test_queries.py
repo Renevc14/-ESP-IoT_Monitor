@@ -90,6 +90,13 @@ async def test_resolve_bucketed_readings():
 
 
 @pytest.mark.asyncio
+async def test_resolve_hourly_readings():
+    rows = [(NOW, 21.5, 18.0, 25.0, 60)]
+    out = await queries.resolve_hourly_readings(_info(FakeResult(rows)), device_id="d", sensor_type="temperature", days=7)
+    assert out[0].avg_value == 21.5 and out[0].reading_count == 60
+
+
+@pytest.mark.asyncio
 async def test_resolve_devices_composition():
     http = FakeClient([{"id": "d1", "name": "Sensor", "device_type": "multi_sensor", "location": "Lab", "is_active": True, "created_at": ISO}])
     out = await queries.resolve_devices(_info(http=http), is_active=True)
