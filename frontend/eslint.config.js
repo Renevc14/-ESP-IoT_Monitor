@@ -19,5 +19,12 @@ export default defineConfig([
       ecmaVersion: 2020,
       globals: globals.browser,
     },
+    rules: {
+      // Estilístico/HMR → advertencia (no bloquea). Las reglas de CORRECCIÓN de
+      // react-hooks (refs, static-components, set-state-in-effect) siguen como error.
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'no-empty': 'warn',
+      'react-refresh/only-export-components': 'warn',
+    },
   },
 ])

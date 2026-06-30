@@ -18,6 +18,13 @@ describe('statusFor', () => {
     expect(statusFor('temperature', 5)).toBe('critical')
   })
 
+  it('clasifica energía (kW con signo): descarga negativa y sobreconsumo', () => {
+    expect(statusFor('energy', 1)).toBe('normal')
+    expect(statusFor('energy', -2.5)).toBe('warning')
+    expect(statusFor('energy', -3.5)).toBe('critical')
+    expect(statusFor('energy', 5.5)).toBe('critical')
+  })
+
   it('trata un sensor desconocido como normal', () => {
     expect(statusFor('desconocido', 9999)).toBe('normal')
   })

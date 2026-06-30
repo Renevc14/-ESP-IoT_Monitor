@@ -172,7 +172,9 @@ function SensorPanel({ deviceId, sensor, hours, deviceName }: { deviceId: string
 
   // Real-time: refetch (debounced) cuando llega una lectura nueva por suscripción
   const refetchRef = useRef(refetch)
-  refetchRef.current = refetch
+  useEffect(() => {
+    refetchRef.current = refetch
+  }, [refetch])
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
     const unsub = subscribeReadings({ deviceId, sensorType: sensor }, () => {

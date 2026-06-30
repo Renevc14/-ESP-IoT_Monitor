@@ -29,6 +29,22 @@ const TH = 'text-left px-4 py-2.5 text-[11px] font-medium uppercase tracking-wid
 const TD = 'px-4 py-3'
 const ROW = 'border-t border-line/60 hover:bg-surface-2/40 transition-colors'
 
+// Definido a nivel de módulo (no dentro del render) para no recrear el tipo de
+// componente en cada render, lo que desmontaría el subárbol y perdería foco/estado.
+function FilterBtn<T extends string>({ value, current, onClick, children }: { value: T; current: T; onClick: (v: T) => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={() => onClick(value)}
+      className={cn(
+        'px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
+        current === value ? 'bg-surface-2 text-foreground' : 'text-muted hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
 export default function Alerts() {
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [devices, setDevices] = useState<Device[]>([])
@@ -102,20 +118,6 @@ export default function Alerts() {
   const activeCount = alerts.filter((a) => a.status === 'active').length
   const criticalCount = alerts.filter((a) => a.severity === 'critical' && a.status === 'active').length
   const wsColor = wsStatus === 'connected' ? 'bg-success' : wsStatus === 'connecting' ? 'bg-warning' : 'bg-danger'
-
-  function FilterBtn<T extends string>({ value, current, onClick, children }: { value: T; current: T; onClick: (v: T) => void; children: React.ReactNode }) {
-    return (
-      <button
-        onClick={() => onClick(value)}
-        className={cn(
-          'px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
-          current === value ? 'bg-surface-2 text-foreground' : 'text-muted hover:text-foreground',
-        )}
-      >
-        {children}
-      </button>
-    )
-  }
 
   return (
     <div>

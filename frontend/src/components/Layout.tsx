@@ -1,6 +1,6 @@
 import { Activity, BarChart3, Bell, Cpu, HeartPulse, LayoutDashboard, LogOut, Menu, ScrollText, SlidersHorizontal, Users } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { cn } from './ui/cn'
@@ -8,7 +8,6 @@ import { cn } from './ui/cn'
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
-  const location = useLocation()
   const [activeAlerts, setActiveAlerts] = useState(0)
   const [navOpen, setNavOpen] = useState(false)
 
@@ -22,9 +21,6 @@ export default function Layout() {
     const id = setInterval(fetchCount, 30000)
     return () => clearInterval(id)
   }, [])
-
-  // Cerrar el drawer móvil al navegar
-  useEffect(() => setNavOpen(false), [location.pathname])
 
   function handleLogout() {
     logout()
@@ -71,7 +67,7 @@ export default function Layout() {
 
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {NAV.map(({ to, icon: Icon, label, badge }) => (
-            <NavLink key={to} to={to} end={to === '/'}>
+            <NavLink key={to} to={to} end={to === '/'} onClick={() => setNavOpen(false)}>
               {({ isActive }) => (
                 <span
                   className={cn(
