@@ -1,0 +1,13 @@
+# Cobertura sobre la validación del payload y la autenticación/RBAC del router.
+[run]
+omit =
+    app/main.py
+    app/config.py
+    app/publisher.py
+    app/observability.py
+    app/security_headers.py
+    app/__init__.py
+
+[report]
+show_missing = True
+fail_under = 80
