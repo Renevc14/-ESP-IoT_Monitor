@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     exchange_name: str = "sensor_data_exchange"
     queue_name: str = "alerts_queue"
     jwt_secret_key: str  # obligatorio: el servicio no arranca sin secreto (fail-closed)
+    allowed_origins: str = "http://localhost"
 
     # SMTP / email notifications
     smtp_host: str = ""

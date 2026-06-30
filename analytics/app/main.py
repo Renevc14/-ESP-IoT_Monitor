@@ -16,6 +16,7 @@ from app import consumer
 from app.config import settings
 from app.observability import setup_observability
 from app.routers.export import router as export_router
+from app.security_headers import security_headers_middleware
 from app.resolvers.queries import (
     resolve_alert_summary,
     resolve_alerts,
@@ -153,6 +154,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(security_headers_middleware)
 
 app.include_router(export_router)
 

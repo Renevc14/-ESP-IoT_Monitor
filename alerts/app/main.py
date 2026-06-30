@@ -11,6 +11,7 @@ from app.config import settings
 from app.observability import setup_observability
 from app.routers.alerts import router
 from app.routers.rules import router as rules_router
+from app.security_headers import security_headers_middleware
 
 
 @asynccontextmanager
@@ -56,10 +57,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.allowed_origins.split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(security_headers_middleware)
 
 setup_observability(app, "alerts")
 

@@ -76,7 +76,7 @@ async def export_readings_csv(
     device_id: Optional[str] = Query(None),
     sensor_type: Optional[str] = Query(None),
     hours: Optional[int] = Query(None),
-    limit: int = Query(10000, le=100000),
+    limit: int = Query(10000, le=20000),
     _: None = Depends(require_token),
 ):
     rows = await _fetch_rows(request, device_id, sensor_type, hours, limit)
@@ -106,7 +106,7 @@ async def export_readings_json(
     device_id: Optional[str] = Query(None),
     sensor_type: Optional[str] = Query(None),
     hours: Optional[int] = Query(None),
-    limit: int = Query(10000, le=100000),
+    limit: int = Query(10000, le=20000),
     _: None = Depends(require_token),
 ):
     rows = await _fetch_rows(request, device_id, sensor_type, hours, limit)

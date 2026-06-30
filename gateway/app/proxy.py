@@ -16,6 +16,9 @@ ROUTES = [
     ("/sensors", settings.registry_url),
     ("/alert-rules", settings.alerts_url),
     ("/alerts", settings.alerts_url),
+    ("/ingest", settings.ingestion_url),
+    ("/graphql", settings.analytics_url),
+    ("/export", settings.analytics_url),
 ]
 
 # Rutas públicas (no requieren token)
