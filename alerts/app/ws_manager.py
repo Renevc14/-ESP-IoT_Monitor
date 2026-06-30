@@ -24,13 +24,13 @@ class WebSocketManager:
         if not self._connections:
             return
         message = json.dumps(payload, default=str)
-        dead: set[WebSocket] = set()
-        for ws in self._connections:
+        # Se itera sobre una copia y se descartan las muertas con discard para evitar
+        # condiciones de carrera con connect/disconnect concurrentes durante el await.
+        for ws in list(self._connections):
             try:
                 await ws.send_text(message)
             except Exception:
-                dead.add(ws)
-        self._connections -= dead
+                self._connections.discard(ws)
 
 
 manager = WebSocketManager()

@@ -15,7 +15,7 @@ class SensorType(str, Enum):
 class ReadingPayload(BaseModel):
     device_id: uuid.UUID
     sensor_type: SensorType
-    value: float = Field(..., description="Sensor reading value")
+    value: float = Field(..., allow_inf_nan=False, description="Sensor reading value")
     unit: str = Field(..., max_length=20)
     recorded_at: Optional[datetime] = None
 

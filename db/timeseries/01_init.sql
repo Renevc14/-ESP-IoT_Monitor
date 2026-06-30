@@ -21,5 +21,10 @@ CREATE TABLE iot.sensor_readings (
 CREATE INDEX idx_sensor_readings_device_time ON iot.sensor_readings (device_id, recorded_at DESC);
 CREATE INDEX idx_sensor_readings_sensor_type ON iot.sensor_readings (sensor_type, recorded_at DESC);
 
+-- Clave natural única: idempotencia ante reentrega de RabbitMQ (at-least-once).
+-- Incluye recorded_at por ser la columna de partición de la hypertable.
+CREATE UNIQUE INDEX idx_sensor_readings_dedup
+    ON iot.sensor_readings (device_id, sensor_type, recorded_at);
+
 SELECT create_hypertable('iot.sensor_readings', 'recorded_at',
     chunk_time_interval => INTERVAL '1 week', if_not_exists => TRUE);

@@ -1,7 +1,7 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import List
-
-import asyncio
 
 import httpx
 import strawberry
@@ -109,8 +109,24 @@ async def lifespan(app: FastAPI):
     graphql_app = GraphQLRouter(schema, context_getter=get_context)
     app.include_router(graphql_app, prefix="/graphql")
 
-    # Real-time: consume the fanout exchange and feed GraphQL subscriptions
-    consume_task = asyncio.create_task(consumer.start_consuming())
+    # Real-time: consume the fanout exchange and feed GraphQL subscriptions.
+    # Supervisado: reintenta con backoff si el consumidor falla en vez de morir callado.
+    app.state.consumer_ok = False
+
+    async def _supervise():
+        while True:
+            try:
+                app.state.consumer_ok = True
+                await consumer.start_consuming()
+                app.state.consumer_ok = False
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                app.state.consumer_ok = False
+                logging.getLogger(__name__).exception("Consumidor de analytics caído; reintentando en 5s")
+                await asyncio.sleep(5)
+
+    consume_task = asyncio.create_task(_supervise())
 
     yield
 
@@ -145,4 +161,4 @@ setup_observability(app, "analytics")
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok", "service": "analytics"}
+    return {"status": "ok", "service": "analytics", "consumer": getattr(app.state, "consumer_ok", False)}

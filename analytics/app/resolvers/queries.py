@@ -1,10 +1,14 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
+import httpx
 import strawberry
 from sqlalchemy import text
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 from app.types.schema import AlertSummaryType, AlertType, BucketedReadingType, DeviceSummaryType, DeviceType, SensorReadingType
 
@@ -115,9 +119,14 @@ async def resolve_devices(
     is_active: Optional[bool] = None,
 ) -> List[DeviceType]:
     client = info.context["http"]
-    resp = await client.get(f"{settings.registry_url}/devices", headers=_auth_headers(info))
-    resp.raise_for_status()
-    rows = resp.json()
+    try:
+        resp = await client.get(f"{settings.registry_url}/devices", headers=_auth_headers(info))
+        resp.raise_for_status()
+        rows = resp.json()
+    except httpx.HTTPError as exc:
+        # Degradación elegante: si registry no responde, no se anula la query completa.
+        logger.warning("Composición de devices falló (registry): %s", exc)
+        return []
     return [
         DeviceType(
             id=str(d["id"]),
@@ -143,9 +152,13 @@ async def resolve_alerts(
     if status:
         params["status"] = status
     client = info.context["http"]
-    resp = await client.get(f"{settings.alerts_url}/alerts", params=params, headers=_auth_headers(info))
-    resp.raise_for_status()
-    rows = resp.json()
+    try:
+        resp = await client.get(f"{settings.alerts_url}/alerts", params=params, headers=_auth_headers(info))
+        resp.raise_for_status()
+        rows = resp.json()
+    except httpx.HTTPError as exc:
+        logger.warning("Composición de alerts falló: %s", exc)
+        return []
     out = []
     for a in rows:
         if device_id and str(a["device_id"]) != device_id:
@@ -164,9 +177,13 @@ async def resolve_alerts(
 
 async def resolve_alert_summary(info: strawberry.types.Info) -> AlertSummaryType:
     client = info.context["http"]
-    resp = await client.get(f"{settings.alerts_url}/alerts/summary", headers=_auth_headers(info))
-    resp.raise_for_status()
-    d = resp.json()
+    try:
+        resp = await client.get(f"{settings.alerts_url}/alerts/summary", headers=_auth_headers(info))
+        resp.raise_for_status()
+        d = resp.json()
+    except httpx.HTTPError as exc:
+        logger.warning("Composición de alert_summary falló: %s", exc)
+        return AlertSummaryType(total=0, active=0, critical=0, warning=0)
     return AlertSummaryType(total=d["total"], active=d["active"], critical=d["critical"], warning=d["warning"])
 
 
