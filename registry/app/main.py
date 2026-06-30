@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.observability import setup_observability
-from app.routers import devices
+from app.routers import devices, sensors
 
 app = FastAPI(
     title="IoT Registry Service",
@@ -24,6 +24,7 @@ app.add_middleware(
 setup_observability(app, "registry")
 
 app.include_router(devices.router)
+app.include_router(sensors.router)
 
 
 @app.get("/health", tags=["Health"])
