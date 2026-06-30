@@ -21,9 +21,24 @@ async def lifespan(app: FastAPI):
     redis = Redis.from_url(settings.redis_url, decode_responses=True)
 
     app.state.redis = redis
+    app.state.consumer_ok = False
 
-    # Start AMQP consumer in background task
-    consume_task = asyncio.create_task(consumer.start_consuming(session_factory, redis))
+    # Supervisa el consumidor: si falla al arrancar o se cae el canal, reintenta
+    # con backoff en vez de morir en silencio (la Task quedaba sin observar).
+    async def _supervise():
+        while True:
+            try:
+                app.state.consumer_ok = True
+                await consumer.start_consuming(session_factory, redis)
+                app.state.consumer_ok = False  # el iterator terminó inesperadamente
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                app.state.consumer_ok = False
+                logger.exception("Consumidor caído; reintentando en 5s")
+                await asyncio.sleep(5)
+
+    consume_task = asyncio.create_task(_supervise())
 
     yield
 
@@ -50,7 +65,7 @@ setup_observability(app, "processing")
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok", "service": "processing"}
+    return {"status": "ok", "service": "processing", "consumer": getattr(app.state, "consumer_ok", False)}
 
 
 @app.get("/cache/{device_id}/{sensor_type}", tags=["Cache"])

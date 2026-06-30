@@ -14,18 +14,27 @@ _connection: aio_pika.abc.AbstractConnection | None = None
 
 
 async def handle_message(message, session_factory: async_sessionmaker) -> None:
-    """Procesa un mensaje con política de reintento + dead-letter.
+    """Procesa un mensaje distinguiendo error permanente (veneno) de transitorio.
 
-    Éxito → ack. Primer fallo → nack con requeue (reintento de transitorios).
-    Fallo en la reentrega → nack sin requeue (va a la DLQ vía x-dead-letter-exchange).
+    Formato inválido (JSON/clave/valor) → DLQ inmediata, no se reintenta.
+    Éxito → ack. Fallo transitorio → reintento y luego DLQ (x-dead-letter-exchange).
     """
     try:
         body = json.loads(message.body.decode())
+    except json.JSONDecodeError as exc:
+        logger.error("JSON inválido descartado a DLQ: %s", exc)
+        await message.nack(requeue=False)
+        return
+
+    try:
         await evaluate(body, session_factory)
         await message.ack()
+    except (KeyError, ValueError) as exc:
+        logger.error("Mensaje malformado descartado a DLQ: %s", exc)
+        await message.nack(requeue=False)
     except Exception as exc:
         requeue = not message.redelivered
-        logger.error("Failed to evaluate message (requeue=%s): %s", requeue, exc)
+        logger.error("Fallo transitorio al evaluar (requeue=%s): %s", requeue, exc)
         await message.nack(requeue=requeue)
 
 

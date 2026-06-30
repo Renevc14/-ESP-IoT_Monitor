@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     rabbitmq_url: str = "amqp://guest:guest@rabbitmq:5672/"
     exchange_name: str = "sensor_data_exchange"
     queue_name: str = "alerts_queue"
-    jwt_secret_key: str = ""
+    jwt_secret_key: str  # obligatorio: el servicio no arranca sin secreto (fail-closed)
 
     # SMTP / email notifications
     smtp_host: str = ""

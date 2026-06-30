@@ -34,6 +34,13 @@ async def ingest_reading(
     body: ReadingPayload,
     token_payload: dict = Depends(verify_jwt),
 ):
+    # RBAC: solo operador o administrador pueden publicar lecturas (viewer es de solo lectura).
+    if token_payload.get("role") not in ("admin", "operator"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Se requiere rol operador o administrador",
+        )
+
     message = {
         "device_id": str(body.device_id),
         "sensor_type": body.sensor_type.value,

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,8 +18,22 @@ async def lifespan(app: FastAPI):
     engine = create_async_engine(settings.database_url, pool_pre_ping=True)
     session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     app.state.session_factory = session_factory
+    app.state.consumer_ok = False
 
-    consume_task = asyncio.create_task(consumer.start_consuming(session_factory))
+    async def _supervise():
+        while True:
+            try:
+                app.state.consumer_ok = True
+                await consumer.start_consuming(session_factory)
+                app.state.consumer_ok = False
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                app.state.consumer_ok = False
+                logging.getLogger(__name__).exception("Consumidor de alertas caído; reintentando en 5s")
+                await asyncio.sleep(5)
+
+    consume_task = asyncio.create_task(_supervise())
 
     yield
 
@@ -54,4 +69,4 @@ app.include_router(rules_router)
 
 @app.get("/health", tags=["Health"])
 async def health():
-    return {"status": "ok", "service": "alerts"}
+    return {"status": "ok", "service": "alerts", "consumer": getattr(app.state, "consumer_ok", False)}
