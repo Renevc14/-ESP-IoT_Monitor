@@ -1,0 +1,92 @@
+name: CD
+
+# Entrega continua: se dispara al publicar un tag de version (vX.Y.Z) o a mano.
+# Construye y publica las imagenes de cada servicio en GHCR, las escanea,
+# crea un release y deja una etapa de despliegue protegida por entorno.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # ─── Etapa 1: Construir y publicar imagenes + escaneo de vulnerabilidades ───
+  build-push:
+    name: Imagen ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [gateway, identity, registry, ingestion, processing, alerts, analytics, simulator, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Normalizar owner a minusculas
+        id: vars
+        run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login en GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.service }}
+          push: true
+          tags: |
+            ghcr.io/${{ steps.vars.outputs.owner }}/iot-${{ matrix.service }}:${{ github.ref_name }}
+            ghcr.io/${{ steps.vars.outputs.owner }}/iot-${{ matrix.service }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Escaneo de vulnerabilidades (Trivy, informativo)
+        uses: aquasecurity/trivy-action@0.24.0
+        continue-on-error: true
+        with:
+          image-ref: ghcr.io/${{ steps.vars.outputs.owner }}/iot-${{ matrix.service }}:${{ github.sha }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+  # ─── Etapa 2: Release ─────────────────────────────────────────
+  release:
+    name: Crear release
+    needs: [build-push]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publicar release de GitHub
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+
+  # ─── Etapa 3: Despliegue (protegido por entorno con aprobacion manual) ───
+  deploy:
+    name: Desplegar a produccion
+    needs: [build-push]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Punto de integracion de despliegue
+        run: |
+          echo "Imagenes publicadas en GHCR con tag ${{ github.ref_name }}."
+          echo "Despliegue (gestionado por el entorno 'production' con revision manual):"
+          echo "  1. En el host destino: docker compose pull"
+          echo "  2. docker compose up -d --remove-orphans"
+          echo "Configura los secretos/host del entorno 'production' para activar el despliegue real."
