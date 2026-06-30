@@ -4,8 +4,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import publisher
+from app.config import settings
 from app.observability import setup_observability
 from app.routers import ingest
+from app.security_headers import security_headers_middleware
 
 
 @asynccontextmanager
@@ -24,10 +26,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.allowed_origins.split(",")],
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
+app.middleware("http")(security_headers_middleware)
 
 setup_observability(app, "ingestion")
 

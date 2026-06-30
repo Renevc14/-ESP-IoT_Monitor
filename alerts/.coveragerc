@@ -5,6 +5,7 @@ omit =
     app/config.py
     app/consumer.py
     app/observability.py
+    app/security_headers.py
     app/ws_manager.py
     app/routers/*
     app/models/*
