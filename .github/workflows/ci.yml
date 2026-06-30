@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        service: [gateway, identity, alerts, analytics]
+        service: [gateway, identity, registry, ingestion, processing, alerts, analytics]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

@@ -46,6 +46,25 @@ async def operator_token():
         return resp.json()["access_token"]
 
 
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _reset_open_alerts(admin_token):
+    """Resuelve las alertas abiertas de DEVICE_ID antes de la sesión.
+
+    Evita que el dedupe anti-tormenta haga fallar test_02 por estado residual de
+    una corrida previa interrumpida (alerta active/acknowledged sin resolver).
+    """
+    async with httpx.AsyncClient(base_url=GATEWAY_URL) as client:
+        headers = {"Authorization": f"Bearer {admin_token}"}
+        try:
+            resp = await client.get("/alerts", headers=headers, params={"limit": 200})
+            for a in resp.json():
+                if a["device_id"] == DEVICE_ID and a["status"] in ("active", "acknowledged"):
+                    await client.patch(f"/alerts/{a['id']}/resolve", headers=headers)
+        except Exception:
+            pass
+    yield
+
+
 def graphql_query(query: str, variables: dict | None = None, token: str | None = None) -> dict:
     """Synchronous GraphQL helper (used inside poll loops)."""
     payload: dict = {"query": query}

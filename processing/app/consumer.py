@@ -80,7 +80,7 @@ async def handle_message(message, session_factory: async_sessionmaker, redis: Re
         await message.nack(requeue=requeue)
 
 
-async def start_consuming(session_factory: async_sessionmaker, redis: Redis) -> None:
+async def start_consuming(session_factory: async_sessionmaker, redis: Redis) -> None:  # pragma: no cover
     global _connection
     _connection = await aio_pika.connect_robust(settings.rabbitmq_url)
     channel = await _connection.channel()
@@ -112,7 +112,7 @@ async def start_consuming(session_factory: async_sessionmaker, redis: Redis) -> 
             await handle_message(message, session_factory, redis)
 
 
-async def stop_consuming() -> None:
+async def stop_consuming() -> None:  # pragma: no cover
     if _connection:
         await _connection.close()
     logger.info("Processing consumer stopped")

@@ -1,0 +1,12 @@
+# Cobertura sobre handle_message/_persist_and_cache; el wiring AMQP va por integración.
+[run]
+omit =
+    app/main.py
+    app/config.py
+    app/observability.py
+    app/models/*
+    app/__init__.py
+
+[report]
+show_missing = True
+fail_under = 80
