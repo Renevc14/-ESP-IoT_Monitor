@@ -13,6 +13,7 @@ ROUTES = [
     ("/users", settings.identity_url),
     ("/audit-logs", settings.identity_url),
     ("/devices", settings.registry_url),
+    ("/sensors", settings.registry_url),
     ("/alert-rules", settings.alerts_url),
     ("/alerts", settings.alerts_url),
 ]
