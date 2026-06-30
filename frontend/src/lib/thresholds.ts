@@ -9,6 +9,9 @@ export interface Thresholds {
 export const THRESHOLDS: Record<string, Thresholds> = {
   temperature: { criticalLow: 10, warnLow: 15, warnHigh: 35, criticalHigh: 40 },
   humidity: { criticalLow: 20, warnLow: 30, warnHigh: 80, criticalHigh: 90 },
+  // Energía en kW con signo (modelo de panel solar): valores negativos = descarga/fallo
+  // del inversor; valores altos = sobreconsumo. Coherente con el seed de reglas de alerta.
+  energy: { criticalLow: -3, warnLow: -2, warnHigh: 4, criticalHigh: 5 },
 }
 
 export type Status = 'normal' | 'warning' | 'critical'
