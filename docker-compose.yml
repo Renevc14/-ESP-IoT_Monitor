@@ -1,4 +1,6 @@
-# Topes de memoria por tipo de servicio (aplicados por `docker compose` como límites).
+# Topes de memoria por tipo de servicio. NOTA: `deploy.resources.limits` lo aplican
+# Swarm/Kubernetes (o `docker compose --compatibility`); en `docker compose up` normal
+# son orientativos. Documentan el dimensionamiento previsto por servicio.
 x-deploy-app: &deploy-app
   resources:
     limits:
@@ -23,7 +25,7 @@ x-deploy-small: &deploy-small
 services:
   # ─── Bases de datos (una por servicio) ────────────────────────
   identity-db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     container_name: iot-identity-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-iot}
@@ -42,7 +44,7 @@ services:
     networks: [iot_network]
 
   registry-db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     container_name: iot-registry-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-iot}
@@ -80,7 +82,7 @@ services:
     networks: [iot_network]
 
   alerts-db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     container_name: iot-alerts-db
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-iot}
@@ -149,7 +151,7 @@ services:
 
   # ─── Observabilidad (perfil opcional: docker compose --profile observability up) ─
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:v2.54.1@sha256:f6639335d34a77d9d9db382b92eeb7fc00934be8eae81dbc03b31cfe90411a94
     container_name: iot-prometheus
     volumes:
       - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -161,7 +163,7 @@ services:
     networks: [iot_network]
 
   grafana:
-    image: grafana/grafana:11.2.0
+    image: grafana/grafana:11.2.0@sha256:408afb9726de5122b00a2576763a8a57a3c86d5b0eff5305bc994ceb3eb96c3f
     container_name: iot-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}

@@ -1,44 +1,30 @@
-# Database Migrations
+# Esquemas de base de datos (Database per Service)
 
-Run these scripts against your Supabase project in order.
+Cada microservicio tiene su **propia base de datos**; no hay un esquema compartido
+ni Supabase. Los scripts SQL de cada carpeta se montan como *initdb* en el contenedor
+Postgres correspondiente (`docker-compose.yml`) y se ejecutan en orden alfabético la
+primera vez que arranca el volumen.
 
-## Prerequisites
+| Carpeta | Servicio dueño | Contenedor | Contenido |
+|---|---|---|---|
+| `db/identity/` | identity | `identity-db` (PostgreSQL 16) | `01_init.sql` (auth.users, auth.sessions, security.audit_logs) · `02_seed.sql` |
+| `db/registry/` | registry | `registry-db` (PostgreSQL 16) | `01_init.sql` (iot.devices, iot.sensors) · `02_seed.sql` |
+| `db/timeseries/` | processing / analytics | `timeseries-db` (TimescaleDB) | `01_init.sql` (hypertable iot.sensor_readings) · `02_policies.sql` (continuous aggregate, compresión, retención) |
+| `db/alerts/` | alerts | `alerts-db` (PostgreSQL 16) | `01_init.sql` (alerts.alert_rules, alerts.alerts) · `02_seed.sql` |
 
-1. Create a Supabase project at https://supabase.com
-2. Enable the TimescaleDB extension in your Supabase project:
-   - Go to: Database → Extensions → Search "timescaledb" → Enable
+Solo `timeseries-db` usa la extensión **TimescaleDB**; el resto son PostgreSQL 16
+estándar. No hay claves foráneas entre bases distintas: la integridad referencial
+cruzada se mantiene a nivel de aplicación (IDs UUID + composición de API).
 
-## Run Migrations
+## Arranque
 
-### Option A — Supabase SQL Editor
-
-Open each file and paste its contents into the Supabase SQL Editor, running them in order:
-
-1. `01_schemas.sql`
-2. `02_auth_tables.sql`
-3. `03_iot_tables.sql`
-4. `04_alerts_tables.sql`
-5. `05_security_tables.sql`
-6. `06_seed_data.sql`
-
-### Option B — psql CLI
+No hay que ejecutar nada manualmente: `docker compose up` crea cada base y aplica
+sus scripts. Para reinicializar desde cero (re-ejecutar los scripts):
 
 ```bash
-# Get your DATABASE_URL from Supabase Dashboard → Settings → Database → URI
-export DATABASE_URL="postgresql://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres"
-
-psql "$DATABASE_URL" -f 01_schemas.sql
-psql "$DATABASE_URL" -f 02_auth_tables.sql
-psql "$DATABASE_URL" -f 03_iot_tables.sql
-psql "$DATABASE_URL" -f 04_alerts_tables.sql
-psql "$DATABASE_URL" -f 05_security_tables.sql
-psql "$DATABASE_URL" -f 06_seed_data.sql
+docker compose down -v   # elimina los volúmenes de datos
+docker compose up -d
 ```
 
-## After Migrations
-
-Update your `.env` file with the Supabase connection string:
-
-```env
-DATABASE_URL=postgresql+asyncpg://postgres:[PASSWORD]@db.[REF].supabase.co:5432/postgres
-```
+> El DDL en `db/<servicio>/01_init.sql` es la **fuente de verdad** del esquema
+> (no se usa Alembic); los modelos ORM de cada servicio deben reflejarlo.

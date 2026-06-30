@@ -68,7 +68,7 @@ Cada servicio es **dueño de su propia base de datos** (Database per Service); n
 | Database | PostgreSQL 16 + TimescaleDB hypertable (contenedor local, override-able a Timescale Cloud) |
 | Cache | Redis 7 |
 | GraphQL | Strawberry 0.261.1 (Python) |
-| Frontend | React 18 + TypeScript + Vite + Tailwind CSS + Recharts + Apollo Client |
+| Frontend | React 19 + TypeScript + Vite + Tailwind CSS + Recharts + Apollo Client (React Router v7) |
 | Auth | JWT HS256 · bcrypt (passlib) · RBAC (admin/operator/viewer) |
 | Containers | Docker + Docker Compose v2 |
 
@@ -145,7 +145,7 @@ MODE=demo docker compose --profile simulator up simulator
 | POST | `/users` | Create user with role | admin |
 | PATCH | `/users/{id}` | Update role / active / name | admin |
 | GET | `/audit-logs` | Eventos de auditoría (OWASP A09) | admin |
-| GET | `/system/health` | Estado de salud de los 5 servicios | operator+ |
+| GET | `/system/health` | Estado de salud de los 6 servicios de dominio (+ gateway) | operator+ |
 
 #### Devices
 | Method | Endpoint | Description | Auth |
@@ -252,12 +252,13 @@ Three simulated outdoor stations in Cochabamba, Bolivia (real weather from Open-
 
 | Control | Implementation |
 |---------|---------------|
-| A01 — Broken Access Control | RBAC via FastAPI `Depends` on every endpoint |
-| A02 — Cryptographic Failures | Credenciales/tokens **no se guardan en claro**: contraseñas con bcrypt, refresh tokens con SHA-256, tokens de dispositivo con bcrypt. TLS 1.3 en despliegue de producción (ver nota abajo). |
-| A03 — Injection | SQLAlchemy ORM — zero raw SQL string interpolation |
-| A05 — Security Misconfiguration | Restrictive CORS · per-IP rate limiting (Redis) · security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) |
+| A01 — Broken Access Control | El gateway valida el JWT; el **RBAC por rol se aplica en cada servicio de dominio** vía FastAPI `Depends` (require_operator/require_admin) |
+| A02 — Cryptographic Failures | Credenciales/tokens **no se guardan en claro**: contraseñas con bcrypt, refresh tokens con SHA-256, tokens de dispositivo con bcrypt. TLS 1.3 y cifrado AES en reposo se documentan para producción (ver nota abajo). |
+| A03 — Injection | SQLAlchemy ORM en la mayoría de servicios; analytics usa SQL parametrizado con `sqlalchemy.text()` y *binding* (funciones TimescaleDB), **sin interpolación de cadenas de usuario** |
+| A05 — Security Misconfiguration | CORS restrictivo (por `ALLOWED_ORIGINS`) en todos los bordes · rate limiting por IP (Redis) en el gateway · security headers (CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) en gateway, ingestion, alerts y analytics |
 | A07 — Auth Failures | Rotación de refresh en cada `/auth/refresh` · access 15min / refresh 7d · **refresh en cookie HttpOnly** |
 | A09 — Logging Failures | Login OK/fallido, refresh, accesos denegados (403) y CRUD registrados en `security.audit_logs` (consultables en `/audit-logs` y la vista **Logs**) |
+| A10 — SSRF | Las llamadas salientes (analytics → registry/alerts) usan URLs **de configuración fija**, no controladas por el usuario; no hay *fetch* de URLs arbitrarias |
 
 > **Nota TLS 1.3 / cifrado en reposo (A02, RNF-05):** en el entorno local de desarrollo el tráfico es HTTP (el documento, Cap. 5.2.4, acota OWASP a desarrollo). Las credenciales y tokens **ya se almacenan cifrados/hasheados** (no hay datos sensibles en claro). Para producción se documenta TLS 1.3 (reverse proxy) y cifrado de disco/columna; `COOKIE_SECURE=true` activa la cookie segura sobre HTTPS.
 
@@ -289,7 +290,7 @@ Schema: security
 
 ```
 .
-├── gateway/          # API Gateway — auth, RBAC, routing, rate limiting, proxy
+├── gateway/          # API Gateway — validación JWT, rate limiting, security headers, proxy
 │   ├── app/
 │   └── Dockerfile
 ├── ingestion/        # IoT data ingestion service
@@ -304,7 +305,7 @@ Schema: security
 ├── analytics/        # GraphQL API (Strawberry)
 │   ├── app/
 │   └── Dockerfile
-├── frontend/         # React 18 dashboard (Vite + Tailwind + Recharts)
+├── frontend/         # React 19 dashboard (Vite + Tailwind + Recharts)
 │   ├── src/
 │   └── Dockerfile
 ├── simulator/        # IoT device simulator — real Cochabamba weather (Open-Meteo)
